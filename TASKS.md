@@ -19,11 +19,11 @@
 
 目标：搭建 Next.js + Tailwind 基础项目，不实现复杂业务。
 
-- [ ] 初始化 Next.js App Router 项目。
-- [ ] 配置 Tailwind CSS。
-- [ ] 建立 `app`、`components`、`lib`、`types` 基础结构。
-- [ ] 创建基础首页和报告页占位。
-- [ ] 确认可本地启动。
+- [x] 初始化 Next.js App Router 项目。
+- [x] 配置 Tailwind CSS。
+- [x] 建立 `app`、`components`、`lib`、`types` 基础结构。
+- [x] 创建基础首页和报告页占位。
+- [x] 确认可本地启动。
 
 验收标准：本地页面能打开，无业务功能扩展。
 
