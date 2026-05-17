@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { FileUploader, type ParsedResume } from "@/components/FileUploader";
-import { JDInput } from "@/components/JDInput";
+import { JD_CHAR_LIMIT, JDInput } from "@/components/JDInput";
 import { Logo } from "@/components/Logo";
 import { OpeningAnimation } from "@/components/OpeningAnimation";
 
@@ -14,7 +14,8 @@ export default function HomePage() {
   const [jdValue, setJdValue] = useState("");
   const isResumeReady =
     parsedResume !== null && parsedResume.charCount <= RESUME_CHAR_LIMIT;
-  const isJDReady = jdValue.trim().length > 0;
+  const isJDReady =
+    jdValue.trim().length > 0 && jdValue.length <= JD_CHAR_LIMIT;
   const canStartAnalysis = isResumeReady && isJDReady;
 
   return (

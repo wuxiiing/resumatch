@@ -1,6 +1,7 @@
 "use client";
 
-const JD_LIMIT = 1000;
+export const JD_CHAR_LIMIT = 1000;
+const JD_LIMIT_ERROR = "岗位描述超过 1000 字，请精简后再分析。";
 
 type JDInputProps = {
   value: string;
@@ -8,7 +9,8 @@ type JDInputProps = {
 };
 
 export function JDInput({ value, onChange }: JDInputProps) {
-  const isOverLimit = value.length > JD_LIMIT;
+  const charCount = value.length;
+  const isOverLimit = charCount > JD_CHAR_LIMIT;
 
   return (
     <section className="bg-white p-4 sm:p-5">
@@ -26,7 +28,7 @@ export function JDInput({ value, onChange }: JDInputProps) {
               : "border-slate-200 bg-white text-muted"
           }`}
         >
-          {value.length} / {JD_LIMIT}
+          {charCount} / {JD_CHAR_LIMIT}
         </span>
       </div>
 
@@ -37,6 +39,12 @@ export function JDInput({ value, onChange }: JDInputProps) {
         placeholder="粘贴招聘启事里的岗位职责、任职要求或加分项，最多 1000 字"
         value={value}
       />
+
+      {isOverLimit ? (
+        <p className="mt-2 text-xs font-medium leading-5 text-red-600" role="alert">
+          {JD_LIMIT_ERROR}
+        </p>
+      ) : null}
     </section>
   );
 }
