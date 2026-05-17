@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
-
 const JD_LIMIT = 1000;
 
-export function JDInput() {
-  const [value, setValue] = useState("");
+type JDInputProps = {
+  value: string;
+  onChange: (value: string) => void;
+};
+
+export function JDInput({ value, onChange }: JDInputProps) {
   const isOverLimit = value.length > JD_LIMIT;
 
   return (
@@ -31,7 +33,7 @@ export function JDInput() {
       <textarea
         aria-label="目标岗位描述或招聘要求输入"
         className="mt-3 min-h-32 w-full resize-none rounded-[12px] border-line bg-slate-50 text-sm leading-6 text-slate-700 placeholder:text-slate-400 focus:border-brand focus:ring-brand sm:min-h-36"
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         placeholder="粘贴招聘启事里的岗位职责、任职要求或加分项，最多 1000 字"
         value={value}
       />

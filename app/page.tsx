@@ -1,10 +1,22 @@
+"use client";
+
 import Link from "next/link";
-import { FileUploader } from "@/components/FileUploader";
+import { useState } from "react";
+import { FileUploader, type ParsedResume } from "@/components/FileUploader";
 import { JDInput } from "@/components/JDInput";
 import { Logo } from "@/components/Logo";
 import { OpeningAnimation } from "@/components/OpeningAnimation";
 
+const RESUME_CHAR_LIMIT = 3000;
+
 export default function HomePage() {
+  const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
+  const [jdValue, setJdValue] = useState("");
+  const isResumeReady =
+    parsedResume !== null && parsedResume.charCount <= RESUME_CHAR_LIMIT;
+  const isJDReady = jdValue.trim().length > 0;
+  const canStartAnalysis = isResumeReady && isJDReady;
+
   return (
     <OpeningAnimation>
       <main className="min-h-screen bg-white px-4 py-4 text-ink sm:px-6 lg:px-8">
@@ -32,16 +44,27 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6 overflow-hidden rounded-[16px] border border-line bg-white shadow-[0_16px_38px_rgba(15,23,42,0.055)]">
-              <FileUploader />
-              <JDInput />
+              <FileUploader onResumeChange={setParsedResume} />
+              <JDInput onChange={setJdValue} value={jdValue} />
 
               <div className="border-t border-line bg-slate-50/50 p-4">
-                <Link
-                  className="inline-flex w-full items-center justify-center rounded-[12px] bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(0,180,204,0.22)] hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
-                  href="/result"
-                >
-                  开始分析
-                </Link>
+                {canStartAnalysis ? (
+                  <Link
+                    className="inline-flex w-full items-center justify-center rounded-[12px] bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(0,180,204,0.22)] hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+                    href="/result"
+                  >
+                    开始分析
+                  </Link>
+                ) : (
+                  <button
+                    aria-disabled="true"
+                    className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-[12px] border border-slate-200 bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500 shadow-none"
+                    disabled
+                    type="button"
+                  >
+                    开始分析
+                  </button>
+                )}
                 <p className="mt-3 text-center text-xs leading-5 text-muted">
                   每个 IP 每日最多分析 5 次，报告仅作 AI 辅助参考。
                 </p>
