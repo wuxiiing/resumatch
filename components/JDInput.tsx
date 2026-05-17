@@ -1,32 +1,40 @@
+"use client";
+
+import { useState } from "react";
+
+const JD_LIMIT = 1000;
+
 export function JDInput() {
+  const [value, setValue] = useState("");
+  const isOverLimit = value.length > JD_LIMIT;
+
   return (
-    <section className="rounded-[14px] border border-line bg-white p-5 shadow-soft">
-      <div className="flex items-start justify-between gap-4">
+    <section className="bg-white p-4 sm:p-5">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-ink">岗位 JD 输入</h2>
-          <p className="mt-1 text-sm text-muted">
-            粘贴目标岗位描述，正式版本将限制在 1000 字以内。
-          </p>
+          <p className="text-xs font-medium text-brand-dark">步骤 2</p>
+          <h2 className="mt-0.5 text-base font-semibold text-ink">
+            粘贴目标岗位描述 / 招聘要求
+          </h2>
         </div>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-muted">
-          0 / 1000
+        <span
+          className={`w-fit rounded-full border px-3 py-1 text-xs font-medium ${
+            isOverLimit
+              ? "border-red-100 bg-red-50 text-red-600"
+              : "border-slate-200 bg-white text-muted"
+          }`}
+        >
+          {value.length} / {JD_LIMIT}
         </span>
       </div>
 
       <textarea
-        aria-label="岗位 JD 输入占位"
-        className="mt-5 min-h-56 w-full resize-none rounded-[12px] border-line bg-slate-50 text-sm leading-6 text-slate-500 placeholder:text-slate-400 focus:border-brand focus:ring-brand"
-        placeholder="请将目标岗位的职位描述粘贴到这里"
-        readOnly
+        aria-label="目标岗位描述或招聘要求输入"
+        className="mt-3 min-h-32 w-full resize-none rounded-[12px] border-line bg-slate-50 text-sm leading-6 text-slate-700 placeholder:text-slate-400 focus:border-brand focus:ring-brand sm:min-h-36"
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="粘贴招聘启事里的岗位职责、任职要求或加分项，最多 1000 字"
+        value={value}
       />
-
-      <button
-        className="mt-4 w-full rounded-[12px] bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500"
-        disabled
-        type="button"
-      >
-        开始分析（阶段 1 占位）
-      </button>
     </section>
   );
 }

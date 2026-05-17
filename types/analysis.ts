@@ -9,8 +9,14 @@ export type ReportSegment = {
   suggestion: string;
 };
 
+export type JobDirectionItem = {
+  label: string;
+  description: string;
+};
+
 export type SuggestionSummary = {
   label: string;
+  description: string;
   count: number;
 };
 
@@ -26,6 +32,7 @@ export type HistoryItem = {
 export type AnalysisReport = {
   score: number;
   summary: string;
+  jobDirection: JobDirectionItem[];
   matchedKeywords: string[];
   missingKeywords: string[];
   suggestions: SuggestionSummary[];

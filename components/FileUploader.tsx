@@ -1,34 +1,81 @@
+"use client";
+
+import { useId, useRef, useState } from "react";
+
 export function FileUploader() {
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState("");
+  const fileExtension = fileName.split(".").pop()?.toUpperCase() || "FILE";
+
+  function clearFile() {
+    setFileName("");
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
   return (
-    <section className="rounded-[14px] border border-line bg-white p-5 shadow-soft">
-      <div className="flex items-start justify-between gap-4">
+    <section className="border-b border-line bg-white px-4 py-3 sm:px-5">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-ink">简历上传</h2>
-          <p className="mt-1 text-sm text-muted">
-            支持 .pdf / .docx / .xlsx，阶段 1 仅展示上传区域占位。
-          </p>
+          <p className="text-xs font-medium text-brand-dark">步骤 1</p>
+          <h2 className="mt-0.5 text-base font-semibold text-ink">上传简历</h2>
         </div>
-        <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-brand-dark">
-          占位
+        <span className="w-fit text-xs leading-5 text-muted">
+          支持 pdf / docx / xlsx
         </span>
       </div>
 
-      <div className="mt-5 flex min-h-56 flex-col items-center justify-center rounded-[12px] border border-dashed border-cyan-200 bg-slate-50/70 px-6 py-8 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-100 bg-white text-xl font-semibold text-brand">
-          +
+      <div className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+        <label
+          className="inline-flex w-full cursor-pointer items-center justify-center rounded-[10px] border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-medium text-brand-dark transition hover:border-brand hover:bg-cyan-100/60 sm:w-auto"
+          htmlFor={inputId}
+        >
+          选择文件
+        </label>
+
+        <div className="min-w-0 flex-1">
+          {fileName ? (
+            <div className="flex min-w-0 items-center gap-2 rounded-[10px] border border-line bg-slate-50 px-3 py-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-cyan-100 bg-white text-xs font-semibold text-brand-dark">
+                文
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
+                {fileName}
+              </span>
+              <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-muted">
+                {fileExtension}
+              </span>
+              <button
+                className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-muted hover:bg-white hover:text-red-500"
+                onClick={clearFile}
+                type="button"
+              >
+                删除
+              </button>
+            </div>
+          ) : (
+            <div className="truncate rounded-[10px] border border-line bg-slate-50 px-3 py-2 text-sm text-muted">
+              未选择文件
+            </div>
+          )}
         </div>
-        <p className="mt-4 text-sm font-medium text-ink">点击或拖拽简历文件到这里</p>
-        <p className="mt-2 max-w-sm text-xs leading-5 text-muted">
-          本阶段不读取文件内容，不进行解析，也不会上传到任何接口。
-        </p>
       </div>
 
-      <div className="mt-4 rounded-[12px] border border-line bg-slate-50 px-4 py-3">
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="font-medium text-slate-700">文件状态</span>
-          <span className="text-muted">等待用户选择文件</span>
-        </div>
-      </div>
+      <input
+        accept=".pdf,.docx,.xlsx"
+        className="sr-only"
+        id={inputId}
+        onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
+        ref={inputRef}
+        type="file"
+      />
+
+      <p className="mt-2 text-xs leading-5 text-muted">
+        仅限 1 份，最多 3000 字。正式分析前会检查内容长度。
+      </p>
     </section>
   );
 }

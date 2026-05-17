@@ -7,7 +7,7 @@ type HistorySidebarProps = {
 
 export function HistorySidebar({ history }: HistorySidebarProps) {
   return (
-    <aside className="border-b border-line bg-slate-50/80 p-4 lg:min-h-screen lg:w-[292px] lg:border-b-0 lg:border-r">
+    <aside className="border-b border-line bg-slate-50/80 p-4 lg:min-h-screen lg:w-[292px] lg:shrink-0 lg:border-b-0 lg:border-r">
       <Logo />
 
       <label className="mt-8 block">
@@ -24,18 +24,18 @@ export function HistorySidebar({ history }: HistorySidebarProps) {
         {history.map((item) => (
           <article
             className={`rounded-[12px] border bg-white p-4 ${
-              item.active
-                ? "border-brand bg-cyan-50/50"
-                : "border-line"
+              item.active ? "border-brand bg-cyan-50/50" : "border-line"
             }`}
             key={item.id}
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-ink">{item.company}</h2>
-                <p className="mt-1 text-xs text-muted">{item.role}</p>
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-semibold text-ink">
+                  {item.company}
+                </h2>
+                <p className="mt-1 truncate text-xs text-muted">{item.role}</p>
               </div>
-              <span className={`text-sm font-semibold ${scoreColor(item.score)}`}>
+              <span className={`shrink-0 text-sm font-semibold ${scoreColor(item.score)}`}>
                 {item.score}%
               </span>
             </div>

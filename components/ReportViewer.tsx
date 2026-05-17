@@ -27,15 +27,12 @@ const statusMeta: Record<
 
 export function ReportViewer({ segments }: ReportViewerProps) {
   return (
-    <section className="rounded-[14px] border border-line bg-white p-5 shadow-soft">
-      <div className="flex flex-col gap-4 border-b border-line pb-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-ink">简历分析详情</h2>
-          <p className="mt-1 text-sm text-muted">
-            以下为静态标注报告占位，正式版本仅做只读展示。
-          </p>
-        </div>
-        <Legend />
+    <section className="rounded-[14px] border border-line bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.035)]">
+      <div className="border-b border-line pb-4">
+        <h2 className="text-base font-semibold text-ink">简历分析详情</h2>
+        <p className="mt-1 text-sm text-muted">
+          以下为静态标注报告占位，正式版本仅做只读展示。
+        </p>
       </div>
 
       <div className="mt-5 space-y-4">
@@ -57,7 +54,7 @@ export function ReportViewer({ segments }: ReportViewerProps) {
                 {segment.original}
               </p>
               {segment.status === "optimize" ? (
-                <div className="mt-4 rounded-[10px] border border-amber-200 bg-white/70 p-4">
+                <div className="mt-4 rounded-[10px] border border-amber-200 bg-white/75 p-4">
                   <p className="text-xs font-semibold text-amber-700">问题说明</p>
                   <p className="mt-2 text-sm leading-6 text-slate-700">
                     {segment.comment}
@@ -78,21 +75,26 @@ export function ReportViewer({ segments }: ReportViewerProps) {
   );
 }
 
-function Legend() {
+export function ReportLegend() {
   const items = [
-    { color: "bg-emerald-500", text: "绿色：与 JD 高度相关" },
-    { color: "bg-amber-500", text: "黄色：建议优化表达" },
-    { color: "bg-slate-400", text: "灰色：关联度较低" }
+    { color: "bg-emerald-500", text: "绿色：与 JD 高度相关，建议保留" },
+    { color: "bg-amber-500", text: "黄色：内容有价值，建议优化表达" },
+    { color: "bg-slate-400", text: "灰色：与目标岗位关联度较低" }
   ];
 
   return (
-    <div className="flex flex-wrap gap-3">
-      {items.map((item) => (
-        <span className="inline-flex items-center gap-2 text-xs text-muted" key={item.text}>
-          <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
-          {item.text}
-        </span>
-      ))}
-    </div>
+    <section className="rounded-[12px] border border-line bg-white px-4 py-3">
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {items.map((item) => (
+          <span
+            className="inline-flex items-center gap-2 text-xs leading-5 text-muted"
+            key={item.text}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
+            {item.text}
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }

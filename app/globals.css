@@ -33,3 +33,15 @@ textarea {
 ::selection {
   background: rgba(0, 180, 204, 0.16);
 }
+
+.keyword-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  touch-action: pan-x;
+}
+
+.keyword-scroll::-webkit-scrollbar {
+  display: none;
+}

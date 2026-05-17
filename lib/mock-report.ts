@@ -4,12 +4,58 @@ export const placeholderReport: AnalysisReport = {
   score: 87,
   summary:
     "这份简历与目标岗位的基础能力要求匹配度较高，项目经历能够支撑岗位方向。建议补充更多量化结果，并把部分通用表述改成更贴近 JD 的关键词表达。",
-  matchedKeywords: ["Next.js", "数据分析", "用户研究", "组件化", "项目交付"],
-  missingKeywords: ["A/B 测试", "指标归因", "自动化流程"],
+  jobDirection: [
+    {
+      label: "JD 关注点",
+      description:
+        "岗位更看重工具型产品的前端实现、信息结构拆解和数据辅助决策能力。"
+    },
+    {
+      label: "老板想看到",
+      description:
+        "简历需要证明你能把模糊需求落到页面结构、组件规范和可交付结果上。"
+    },
+    {
+      label: "最有支撑力的证据",
+      description:
+        "项目经历里的流程优化、用户反馈整理、指标表达和量化结果最能支撑匹配。"
+    }
+  ],
+  matchedKeywords: [
+    "Next.js",
+    "数据分析",
+    "用户研究",
+    "组件化",
+    "项目交付",
+    "信息架构",
+    "TypeScript",
+    "跨角色协作",
+    "报告呈现"
+  ],
+  missingKeywords: [
+    "A/B 测试",
+    "指标归因",
+    "自动化流程",
+    "漏斗分析",
+    "增长实验",
+    "质量监控"
+  ],
   suggestions: [
-    { label: "技能层面", count: 2 },
-    { label: "项目经验", count: 3 },
-    { label: "成果量化", count: 2 }
+    {
+      label: "技能层面",
+      description: "补足 JD 中反复出现但简历表达较弱的工具和方法词。",
+      count: 2
+    },
+    {
+      label: "项目经验",
+      description: "把项目职责和岗位要求建立更直接的对应关系。",
+      count: 3
+    },
+    {
+      label: "成果量化",
+      description: "将“提升效率”等概括表述替换为可判断的结果描述。",
+      count: 2
+    }
   ],
   history: [
     {
