@@ -1,22 +1,84 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FileUploader, type ParsedResume } from "@/components/FileUploader";
 import { JD_CHAR_LIMIT, JDInput } from "@/components/JDInput";
 import { Logo } from "@/components/Logo";
 import { OpeningAnimation } from "@/components/OpeningAnimation";
+import type { AnalysisReport } from "@/types/analysis";
 
 const RESUME_CHAR_LIMIT = 3000;
+const ANALYSIS_REPORT_STORAGE_KEY = "resumatch:last-analysis-report";
+
+type AnalyzeError = {
+  error?: string;
+};
 
 export default function HomePage() {
+  const router = useRouter();
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [jdValue, setJdValue] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
   const isResumeReady =
     parsedResume !== null && parsedResume.charCount <= RESUME_CHAR_LIMIT;
   const isJDReady =
     jdValue.trim().length > 0 && jdValue.length <= JD_CHAR_LIMIT;
   const canStartAnalysis = isResumeReady && isJDReady;
+  const isAnalyzeDisabled = !canStartAnalysis || isAnalyzing;
+
+  function handleResumeChange(resume: ParsedResume | null) {
+    setParsedResume(resume);
+    setAnalyzeError("");
+  }
+
+  function handleJDChange(value: string) {
+    setJdValue(value);
+    setAnalyzeError("");
+  }
+
+  async function handleStartAnalysis() {
+    const resume = parsedResume;
+
+    if (!canStartAnalysis || !resume || isAnalyzing) {
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalyzeError("");
+
+    try {
+      const response = await fetch("/api/analyze", {
+        body: JSON.stringify({
+          resumeText: resume.text,
+          jobDescription: jdValue
+        }),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        method: "POST"
+      });
+      const result = (await response.json()) as AnalysisReport | AnalyzeError;
+
+      if (!response.ok) {
+        setAnalyzeError(
+          "error" in result && result.error
+            ? result.error
+            : "分析失败，请稍后再试。"
+        );
+        return;
+      }
+
+      sessionStorage.setItem(ANALYSIS_REPORT_STORAGE_KEY, JSON.stringify(result));
+      router.push("/result");
+    } catch {
+      setAnalyzeError("分析服务暂时不可用，请检查网络后重试。");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
 
   return (
     <OpeningAnimation>
@@ -45,27 +107,28 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6 overflow-hidden rounded-[16px] border border-line bg-white shadow-[0_16px_38px_rgba(15,23,42,0.055)]">
-              <FileUploader onResumeChange={setParsedResume} />
-              <JDInput onChange={setJdValue} value={jdValue} />
+              <FileUploader onResumeChange={handleResumeChange} />
+              <JDInput onChange={handleJDChange} value={jdValue} />
 
               <div className="border-t border-line bg-slate-50/50 p-4">
-                {canStartAnalysis ? (
-                  <Link
-                    className="inline-flex w-full items-center justify-center rounded-[12px] bg-brand px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(0,180,204,0.22)] hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
-                    href="/result"
-                  >
-                    开始分析
-                  </Link>
-                ) : (
-                  <button
-                    aria-disabled="true"
-                    className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-[12px] border border-slate-200 bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500 shadow-none"
-                    disabled
-                    type="button"
-                  >
-                    开始分析
-                  </button>
-                )}
+                <button
+                  aria-disabled={isAnalyzeDisabled}
+                  className={`inline-flex w-full items-center justify-center rounded-[12px] px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    isAnalyzeDisabled
+                      ? "cursor-not-allowed border border-slate-200 bg-slate-200 text-slate-500 shadow-none focus:ring-slate-300"
+                      : "bg-brand text-white shadow-[0_12px_30px_rgba(0,180,204,0.22)] hover:bg-brand-dark focus:ring-brand"
+                  }`}
+                  disabled={isAnalyzeDisabled}
+                  onClick={handleStartAnalysis}
+                  type="button"
+                >
+                  {isAnalyzing ? "正在分析简历匹配度..." : "开始分析"}
+                </button>
+                {analyzeError ? (
+                  <p className="mt-3 rounded-[10px] border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-600">
+                    {analyzeError}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-center text-xs leading-5 text-muted">
                   每个 IP 每日最多分析 5 次，报告仅作 AI 辅助参考。
                 </p>
