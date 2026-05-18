@@ -6,7 +6,7 @@ import { useId, useRef, useState } from "react";
 export type ParsedResume = {
   text: string;
   charCount: number;
-  fileType: "docx";
+  fileType: "docx" | "xlsx" | "pdf" | "txt";
 };
 
 type ParseResumeError = {
@@ -102,7 +102,7 @@ export function FileUploader({ onResumeChange }: FileUploaderProps) {
           <h2 className="mt-0.5 text-base font-semibold text-ink">上传简历</h2>
         </div>
         <span className="w-fit text-xs leading-5 text-muted">
-          支持 pdf / docx / xlsx
+          支持 docx / xlsx / pdf / txt
         </span>
       </div>
 
@@ -143,7 +143,7 @@ export function FileUploader({ onResumeChange }: FileUploaderProps) {
       </div>
 
       <input
-        accept=".pdf,.docx,.xlsx"
+        accept=".docx,.xlsx,.pdf,.txt"
         className="sr-only"
         id={inputId}
         onChange={handleFileChange}
