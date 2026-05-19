@@ -1,8 +1,10 @@
 import type {
   AnalysisReport,
+  AnnotationStatus,
   HistoryItem,
   JobDirectionItem,
   ReportSegment,
+  ResumeAnnotation,
   SegmentStatus,
   SuggestionSummary
 } from "@/types/analysis";
@@ -24,6 +26,7 @@ type ValidationResult<T> =
 
 const MAX_RESUME_TEXT_LENGTH = 3000;
 const MAX_JOB_DESCRIPTION_LENGTH = 1000;
+const annotationStatuses = new Set<AnnotationStatus>(["keep", "improve", "remove"]);
 const segmentStatuses = new Set<SegmentStatus>(["relevant", "optimize", "irrelevant"]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -80,6 +83,35 @@ function isReportSegment(value: unknown): value is ReportSegment {
   );
 }
 
+function isOptionalNumber(value: unknown): value is number | undefined {
+  return value === undefined || typeof value === "number";
+}
+
+function isResumeAnnotation(value: unknown): value is ResumeAnnotation {
+  if (
+    !isPlainObject(value) ||
+    typeof value.id !== "string" ||
+    typeof value.original !== "string" ||
+    typeof value.status !== "string" ||
+    !annotationStatuses.has(value.status as AnnotationStatus) ||
+    typeof value.relatedJdNeed !== "string" ||
+    typeof value.reason !== "string" ||
+    typeof value.suggestion !== "string" ||
+    typeof value.rewriteExample !== "string" ||
+    (value.section !== undefined && typeof value.section !== "string") ||
+    !isOptionalNumber(value.startIndex) ||
+    !isOptionalNumber(value.endIndex)
+  ) {
+    return false;
+  }
+
+  if (value.status === "improve" && value.rewriteExample.trim().length === 0) {
+    return false;
+  }
+
+  return true;
+}
+
 export function validateAnalyzeRequest(payload: unknown): ValidationResult<AnalyzeRequest> {
   if (!isPlainObject(payload)) {
     return { ok: false, error: "请求体必须是 JSON 对象。" };
@@ -126,6 +158,10 @@ export function validateAnalysisReport(report: unknown): ValidationResult<Analys
     return { ok: false, error: "分析结果 summary 必须是字符串。" };
   }
 
+  if (typeof report.resumeOriginal !== "string") {
+    return { ok: false, error: "分析结果 resumeOriginal 必须是字符串。" };
+  }
+
   if (!Array.isArray(report.jobDirection) || !report.jobDirection.every(isJobDirectionItem)) {
     return { ok: false, error: "分析结果 jobDirection 结构不正确。" };
   }
@@ -144,6 +180,10 @@ export function validateAnalysisReport(report: unknown): ValidationResult<Analys
 
   if (!Array.isArray(report.history) || !report.history.every(isHistoryItem)) {
     return { ok: false, error: "分析结果 history 结构不正确。" };
+  }
+
+  if (!Array.isArray(report.annotations) || !report.annotations.every(isResumeAnnotation)) {
+    return { ok: false, error: "分析结果 annotations 结构不正确。" };
   }
 
   if (!Array.isArray(report.segments) || !report.segments.every(isReportSegment)) {

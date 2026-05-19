@@ -3,6 +3,7 @@ import { validateAnalysisReport } from "@/lib/analysis-schema";
 import { analysisSystemPrompt, buildAnalysisUserPrompt } from "@/lib/analysis-prompt";
 import {
   filterUnmatchedSegments,
+  locateResumeAnnotations,
   validateSegmentOriginals,
   type SegmentOriginalIssue
 } from "@/lib/segment-original-validator";
@@ -25,6 +26,8 @@ type DeepSeekChatCompletionResponse = {
 type ParsedModelJson = {
   parsed: unknown;
 };
+
+type ModelReportObject = Record<string, unknown>;
 
 export type DeepSeekConfig = {
   apiKey: string;
@@ -131,6 +134,21 @@ function parseModelJson(content: string): ParsedModelJson {
   }
 }
 
+function isModelReportObject(value: unknown): value is ModelReportObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function withServerResumeOriginal(payload: unknown, resumeText: string): unknown {
+  if (!isModelReportObject(payload)) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    resumeOriginal: resumeText
+  };
+}
+
 function parseDeepSeekContent(
   responseBody: DeepSeekChatCompletionResponse
 ): unknown {
@@ -219,7 +237,9 @@ export async function analyzeWithDeepSeek(
         originalIssues,
         jsonRepairReason
       );
-      const validation = validateAnalysisReport(parsedPayload);
+      const validation = validateAnalysisReport(
+        withServerResumeOriginal(parsedPayload, request.resumeText)
+      );
 
       if (!validation.ok) {
         lastValidationError = validation.error;
@@ -229,16 +249,33 @@ export async function analyzeWithDeepSeek(
 
       const originalValidation = validateSegmentOriginals(validation.data, request.resumeText);
 
-      if (originalValidation.ok) {
-        return validation.data;
+      const annotationValidation = locateResumeAnnotations(
+        validation.data,
+        request.resumeText
+      );
+
+      if (originalValidation.ok && annotationValidation.ok) {
+        return annotationValidation.report;
       }
 
-      lastValidationError = "存在未命中简历原文的 segments.original。";
-      originalIssues = originalValidation.issues;
-      jsonRepairReason = null;
+      if (!originalValidation.ok) {
+        lastValidationError = "存在未命中简历原文的 segments.original。";
+        originalIssues = originalValidation.issues;
+        jsonRepairReason = null;
+      } else {
+        lastValidationError = "存在未命中简历原文的 annotations.original。";
+        originalIssues = [];
+        jsonRepairReason = lastValidationError;
+      }
 
       if (attempt === 1) {
-        const filteredReport = filterUnmatchedSegments(validation.data, request.resumeText);
+        const reportWithMatchedSegments = originalValidation.ok
+          ? validation.data
+          : filterUnmatchedSegments(validation.data, request.resumeText);
+        const filteredReport = locateResumeAnnotations(
+          reportWithMatchedSegments,
+          request.resumeText
+        ).report;
         const filteredValidation = validateAnalysisReport(filteredReport);
 
         if (filteredValidation.ok) {

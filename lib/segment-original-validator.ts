@@ -1,4 +1,4 @@
-import type { AnalysisReport, ReportSegment } from "@/types/analysis";
+import type { AnalysisReport, ReportSegment, ResumeAnnotation } from "@/types/analysis";
 
 export type SegmentOriginalIssue = {
   id: string;
@@ -8,6 +8,17 @@ export type SegmentOriginalIssue = {
 export type SegmentOriginalValidation = {
   ok: boolean;
   issues: SegmentOriginalIssue[];
+};
+
+export type AnnotationOriginalIssue = {
+  id: string;
+  original: string;
+};
+
+export type AnnotationOriginalValidation = {
+  ok: boolean;
+  report: AnalysisReport;
+  issues: AnnotationOriginalIssue[];
 };
 
 function normalizeWhitespace(value: string): string {
@@ -59,3 +70,49 @@ export function filterUnmatchedSegments(
   };
 }
 
+export function locateResumeAnnotations(
+  report: AnalysisReport,
+  resumeText: string
+): AnnotationOriginalValidation {
+  const issues: AnnotationOriginalIssue[] = [];
+  let nextSearchIndex = 0;
+
+  const matchedAnnotations = (report.annotations ?? []).reduce<ResumeAnnotation[]>(
+    (items, annotation) => {
+      const original = annotation.original;
+
+      if (!original) {
+        issues.push({ id: annotation.id, original });
+        return items;
+      }
+
+      const startIndex = resumeText.indexOf(original, nextSearchIndex);
+
+      if (startIndex < 0) {
+        issues.push({ id: annotation.id, original });
+        return items;
+      }
+
+      const endIndex = startIndex + original.length;
+      nextSearchIndex = endIndex;
+
+      items.push({
+        ...annotation,
+        startIndex,
+        endIndex
+      });
+
+      return items;
+    },
+    []
+  );
+
+  return {
+    ok: issues.length === 0,
+    report: {
+      ...report,
+      annotations: matchedAnnotations
+    },
+    issues
+  };
+}
