@@ -1,16 +1,14 @@
 # ResuMatch Agent Guide
 
-This file is the short context entry for Codex agents. Read this first, then read `docs/current/PROJECT_STATE.md`.
+Short entry context for Codex, Claude, and CC agents. Read this file first, then `docs/current/PROJECT_STATE.md`.
 
-## Automatic Low Token Workflow
+## Low Token Workflow
 
-For every coding, repo maintenance, QA, handoff, or multi-window task in this repository:
-
-- First apply the `low-token-coding-workflow` skill when available.
-- Read only `AGENTS.md` and `docs/current/PROJECT_STATE.md` as entry context.
-- Do not default-read `IMPLEMENTATION_LOG.md`, `FRONTEND_DESIGN_GUIDE.md`, `project_handover_resumatch.md`, `docs/codex-handoffs/*`, or `docs/archive/*`.
-- Only read files directly relevant to the current task.
-- Keep reports short: changed files, validation, risks or unfinished items.
+- Apply `low-token-coding-workflow` first when that skill is available.
+- Default context: `AGENTS.md`, `docs/current/PROJECT_STATE.md`, and files named by the task card.
+- Do not default-read long history docs: `IMPLEMENTATION_LOG.md`, `FRONTEND_DESIGN_GUIDE.md`, `project_handover_resumatch.md`, `docs/codex-handoffs/*`, or `docs/archive/*`.
+- Search long docs only when the task needs exact history, prior decisions, or checkpoint evidence.
+- Keep reports short: changed files, validation, business-code impact, risks or unfinished items, and one next step.
 
 ## Common Commands
 
@@ -35,27 +33,13 @@ For every coding, repo maintenance, QA, handoff, or multi-window task in this re
 - Do not push unless the owner explicitly asks.
 - Do not reset, restore, delete, or discard user changes unless explicitly requested.
 
-## Low Token Rules
-
-- Default context: `AGENTS.md` + `docs/current/PROJECT_STATE.md` + the specific files in the task card.
-- Do not default-read long history files: `IMPLEMENTATION_LOG.md`, `FRONTEND_DESIGN_GUIDE.md`, `project_handover_resumatch.md`, or `docs/codex-handoffs/*`.
-- Search long docs only when a task needs exact history, prior decisions, or checkpoint evidence.
-- Do not paste full command outputs when a short summary is enough.
-- Do not append full construction reports to `AGENTS.md`; use `IMPLEMENTATION_LOG.md` only when needed.
-
 ## Local Preview Rules
 
-- For owner review, use a persistent local dev server when possible.
-- If localhost or the in-app browser is blocked, record the blocker and stop retrying.
 - Build/lint are the baseline checks for code tasks; browser checks are used when UI behavior matters.
-
-## Dev Server And Browser Budget
-
-- Do not repeatedly start dev servers; first check whether an existing server is reachable.
-- Prefer the user/owner-run dev server for UI checks.
-- Do not run long-lived `npm run dev` in the foreground.
+- Before starting a dev server, check whether one is already reachable.
+- Prefer owner-run or persistent local dev servers for review.
 - If a dev server must be started, use a bounded/background method and stop it after validation.
-- Browser automation is limited to one short attempt unless the task explicitly asks for more.
+- Limit browser automation to one short attempt unless the task explicitly asks for more.
 - If file upload, localhost access, or browser automation is blocked or unstable, stop retrying and report it as an environment limitation.
 - Prefer source, API, or sessionStorage validation over repeated full UI automation.
 - For logs, inspect only key errors or the last 80 lines.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileUploader, type ParsedResume } from "@/components/FileUploader";
 import { JD_CHAR_LIMIT, JDInput } from "@/components/JDInput";
 import { Logo } from "@/components/Logo";
@@ -11,42 +11,103 @@ import type { AnalysisReport } from "@/types/analysis";
 
 const RESUME_CHAR_LIMIT = 3000;
 const ANALYSIS_REPORT_STORAGE_KEY = "resumatch:last-analysis-report";
+const SUCCESS_REDIRECT_DELAY_MS = 900;
 
 type AnalyzeError = {
   error?: string;
 };
+
+function AnalysisLockOverlay({
+  elapsedSeconds,
+  isComplete
+}: {
+  elapsedSeconds: number;
+  isComplete: boolean;
+}) {
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/75 px-4 py-6 text-center backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-[14px] border border-white/80 bg-white/85 px-4 py-4 shadow-[0_18px_42px_rgba(15,23,42,0.12)]">
+        <div
+          aria-hidden="true"
+          className="mx-auto mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-50"
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-brand shadow-[0_0_18px_rgba(0,180,204,0.55)] motion-safe:animate-ping" />
+        </div>
+        <p className="text-sm font-semibold leading-5 text-ink">
+          {isComplete ? "分析完成，正在打开报告..." : "正在分析简历和岗位描述..."}
+        </p>
+        <p className="mt-2 text-xs leading-5 text-muted">
+          请不要关闭页面，完成后会自动进入结果页。
+        </p>
+        {!isComplete && elapsedSeconds > 10 ? (
+          <p className="mt-3 text-xs leading-5 text-slate-600">
+            正在生成原文批改建议，请稍等。
+          </p>
+        ) : null}
+        {!isComplete && elapsedSeconds > 30 ? (
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            复杂简历可能需要更久，完成后会自动进入结果页。
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const router = useRouter();
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [jdValue, setJdValue] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalysisComplete, setIsAnalysisComplete] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [analyzeError, setAnalyzeError] = useState("");
   const isResumeReady =
     parsedResume !== null && parsedResume.charCount <= RESUME_CHAR_LIMIT;
   const isJDReady =
     jdValue.trim().length > 0 && jdValue.length <= JD_CHAR_LIMIT;
   const canStartAnalysis = isResumeReady && isJDReady;
-  const isAnalyzeDisabled = !canStartAnalysis || isAnalyzing;
+  const isFormLocked = isAnalyzing || isAnalysisComplete;
+  const isAnalyzeDisabled = !canStartAnalysis || isFormLocked;
+
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    setElapsedSeconds(0);
+    const timerId = window.setInterval(() => {
+      setElapsedSeconds((currentSeconds) => currentSeconds + 1);
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [isAnalyzing]);
 
   function handleResumeChange(resume: ParsedResume | null) {
     setParsedResume(resume);
+    setIsAnalysisComplete(false);
     setAnalyzeError("");
   }
 
   function handleJDChange(value: string) {
     setJdValue(value);
+    setIsAnalysisComplete(false);
     setAnalyzeError("");
   }
 
   async function handleStartAnalysis() {
     const resume = parsedResume;
 
-    if (!canStartAnalysis || !resume || isAnalyzing) {
+    if (!canStartAnalysis || !resume || isFormLocked) {
       return;
     }
 
     setIsAnalyzing(true);
+    setIsAnalysisComplete(false);
+    setElapsedSeconds(0);
     setAnalyzeError("");
 
     try {
@@ -68,15 +129,21 @@ export default function HomePage() {
             ? result.error
             : "分析失败，请稍后再试。"
         );
+        setIsAnalyzing(false);
         return;
       }
 
       sessionStorage.setItem(ANALYSIS_REPORT_STORAGE_KEY, JSON.stringify(result));
+      setIsAnalyzing(false);
+      setIsAnalysisComplete(true);
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, SUCCESS_REDIRECT_DELAY_MS);
+      });
       router.push("/result");
     } catch {
       setAnalyzeError("分析服务暂时不可用，请检查网络后重试。");
-    } finally {
       setIsAnalyzing(false);
+      setIsAnalysisComplete(false);
     }
   }
 
@@ -107,8 +174,24 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6 overflow-hidden rounded-[16px] border border-line bg-white shadow-[0_16px_38px_rgba(15,23,42,0.055)]">
-              <FileUploader onResumeChange={handleResumeChange} />
-              <JDInput onChange={handleJDChange} value={jdValue} />
+              <div className="relative">
+                <div
+                  className={
+                    isFormLocked
+                      ? "pointer-events-none select-none opacity-55"
+                      : undefined
+                  }
+                >
+                  <FileUploader onResumeChange={handleResumeChange} />
+                  <JDInput onChange={handleJDChange} value={jdValue} />
+                </div>
+                {isFormLocked ? (
+                  <AnalysisLockOverlay
+                    elapsedSeconds={elapsedSeconds}
+                    isComplete={isAnalysisComplete}
+                  />
+                ) : null}
+              </div>
 
               <div className="border-t border-line bg-slate-50/50 p-4">
                 <button
@@ -122,7 +205,11 @@ export default function HomePage() {
                   onClick={handleStartAnalysis}
                   type="button"
                 >
-                  {isAnalyzing ? "正在分析简历匹配度..." : "开始分析"}
+                  {isAnalysisComplete
+                    ? "正在打开报告..."
+                    : isAnalyzing
+                      ? "正在分析简历匹配度..."
+                      : "开始分析"}
                 </button>
                 {analyzeError ? (
                   <p className="mt-3 rounded-[10px] border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-600">

@@ -1,14 +1,14 @@
 # ResuMatch Current State
 
-Last updated: 2026-05-19
+Last updated: 2026-05-21
 
 ## Project Snapshot
 
 - Path: `D:\AI-workspace\Codex\ResuMatch`
 - App: Next.js App Router + Tailwind CSS.
-- Branch after latest checkpoint: `main...origin/main [ahead 9]`.
-- Latest known checkpoint: `0990f94 feat: add DeepSeek analysis flow`.
-- One untracked handoff doc may exist: `docs/codex-handoffs/2026-05-19-resumatch-control-room-handoff.md`.
+- Branch after latest checkpoint: `main...origin/main [ahead 12]`.
+- Latest known checkpoint: `f410f77 checkpoint: stabilize resume annotations pipeline`.
+- Working tree was clean at the last status check.
 
 ## Current Product Status
 
@@ -21,13 +21,16 @@ Last updated: 2026-05-19
 - JD input limit: 1000 characters.
 - Resume text limit: 3000 characters.
 - DeepSeek analysis main flow is checkpointed.
-- Owner confirmed a real browser flow reached `/result` and showed a real report.
+- Resume annotation pipeline is checkpointed.
+- Result page has an inline resume annotation viewer.
+- Homepage analysis loading now uses a frosted form-lock overlay.
+- Owner has checked the current `/result` experience after the annotations work.
 
-## Important Current Concern
+## Current Focus
 
-- Owner reported that the "简历分析详情" card may not output expected content.
-- Next practical step is to open the site and retest that result-page detail card with a real analysis report.
-- Do not start Word export until this UI/content issue is understood.
+- The current core flow is usable enough to continue product polish.
+- Next recommended task: `PERF-0001` analysis latency and output truncation optimization.
+- Do not start Word export until the owner confirms the current result-page experience is good enough.
 
 ## Key Files
 
@@ -38,7 +41,7 @@ Last updated: 2026-05-19
 - `lib/deepseek-client.ts` - DeepSeek call, JSON parsing, retry, validation.
 - `lib/analysis-prompt.ts` - DeepSeek prompt.
 - `lib/analysis-schema.ts` - request/report validation.
-- `lib/segment-original-validator.ts` - `segments.original` exact-match safety.
+- `lib/segment-original-validator.ts` - original text matching and annotation positioning safety.
 - `types/analysis.ts` - report data shape.
 
 ## Known Risks
@@ -46,23 +49,28 @@ Last updated: 2026-05-19
 - `xlsx@0.18.5` has a high audit issue with no casual fix.
 - `next` / `postcss` moderate audit issue exists; do not force-fix.
 - `pdfjs-dist@5.7.284` requires Node `>=22.13.0 || >=24`; confirm Vercel runtime before production.
+- Analysis requests can still be slow; performance work is pending.
 - Scanned/image PDF OCR is not implemented.
 - Word export is not implemented.
 - IP/global daily rate limits are not implemented.
 - Vercel env vars and production deploy checks are pending.
 
-## Do Not Default Read
+## Recent Checkpoints
 
-- `IMPLEMENTATION_LOG.md` - long history; search only for exact task evidence.
-- `FRONTEND_DESIGN_GUIDE.md` - long design guide; read only for visual work.
-- `project_handover_resumatch.md` - old handoff context.
-- `docs/codex-handoffs/*` - archive/control-room handoffs; read only for handoff recovery.
-- `docs/archive/*` - archive only.
+- `21208b5 checkpoint: add resume annotations result UI`
+- `345fddc checkpoint: add inline resume annotation viewer`
+- `f410f77 checkpoint: stabilize resume annotations pipeline`
 
-## Workflow Notes
+## Suggested Next Sequence
 
-- Keep task cards short.
-- Reduce QA loops; owner handles product experience confirmation.
-- Construction windows should return changed files and checks, not long narratives.
-- Do not print secrets or full private input.
-- Do not push without explicit owner approval.
+1. `PERF-0001` analysis latency and output truncation optimization.
+2. `LIMIT-0001` `/api/analyze` IP/global rate limiting.
+3. `EXPORT-0001` Word report export.
+4. `DEPLOY-0001` Vercel deployment preparation.
+5. `QA-0001` real sample regression.
+6. `RM-0028` PDF parsing paragraph restoration.
+7. `AGENT-0001` JD research agent design for a later phase.
+
+## Workflow Pointer
+
+Use `AGENTS.md` for repository rules and `docs/current/TASK_CARD_TEMPLATE.md` for new task cards.
