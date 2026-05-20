@@ -59,13 +59,24 @@ JSON object 必须符合 AnalysisReport 结构，字段包括 score、summary、
 9. 找不到明确片段时不要编造原文，segments 只放能从简历中找到的连续原文片段。
 10. segments.original 不能把多个不连续片段拼成一个 original。
 11. 如果某个分析点找不到可逐字复制的连续原文片段，不要生成该 segment。
-12. annotations 用于“基于 JD 的简历原文批改视图”，必须围绕 JD 痛点标注简历原文。
-13. annotations.original 必须逐字引用 resumeText 中的一段连续原文，不得翻译、改写、概括、补字、纠错、润色或拼接不连续片段。
-14. 普通无关但无害、无需修改的内容不要生成 annotation；只标注对 JD 匹配判断有帮助的保留点、需要增强点或建议删除点。
-15. annotations.status 只能是 keep、improve、remove，三态语义必须严格区分：keep 表示该原文强支撑 JD 痛点且建议保留；improve 表示该原文有价值但表达不足，需要改写增强；remove 表示该原文与 JD 痛点冲突、稀释重点或占用篇幅，建议删除或大幅压缩。
-16. annotations.relatedJdNeed 必须来自岗位 JD 中明确或可合理归纳的痛点、职责、技能、经验或评估标准，不得泛泛填写。
-17. status 为 improve 时，rewriteExample 必须提供可替换原文的中文改写示例；keep 和 remove 可返回空字符串。
-18. annotations.section、startIndex、endIndex 无法可靠判断时可以省略；如果提供，startIndex 和 endIndex 必须是数字。
+12. annotations 是核心输出，用于”基于 JD 的简历原文批改视图”。必须输出标注，禁止返回空数组 []。总数最多 8 条。根据匹配度选择合适数量：高分匹配好时 2-4 条，中等匹配时 3-5 条，低分匹配差时 2-4 条并诚实指出方向差距。
+13. annotations.original 必须逐字引用 resumeText 中的一段连续原文，优先选择 15-60 字的短原文片段。不得翻译、改写、概括、补字、纠错、润色或拼接不连续片段。每条 annotation 只围绕原文中的”一件事”分析。
+14. 如果简历中有与 JD 明确匹配的经历或技能描述，至少输出 1 条 keep 标注，说明该原文如何支撑 JD 痛点。
+15. 如果简历中有表达可优化的内容，至少输出 1 条 improve 标注并提供可直接替换进简历的完整改写示例。
+16. remove 为可选项，仅在原文明显与 JD 冲突、稀释重点或占用篇幅时输出，最多 2 条。没有需要删除的内容时可不输出 remove。
+17. annotations.status 三态语义：keep = 原文强支撑 JD 痛点建议保留；improve = 原文有价值但表达不足需要改写增强；remove = 原文与 JD 冲突或稀释重点建议删除或压缩。
+18. annotations.relatedJdNeed 不超过 30 字，reason 不超过 50 字，suggestion 不超过 70 字，rewriteExample 不超过 90 字。
+19. status 为 improve 时 rewriteExample 必填非空，提供可直接替换进简历的完整句子；keep 可省略 rewriteExample 或返回空字符串；remove 可省略或给出简短压缩/删除建议。
+20. annotations.section、startIndex、endIndex 无法可靠判断时可省略。
+
+# 按分数调整批改策略
+
+21. 你必须根据 score 区间调整角色语气和 annotations 重点：
+  - score >= 90：润色顾问。只用 keep + improve（禁用 remove）。锦上添花：补量化数据、强化 JD 关键词。summary 强调高匹配，列出 1-2 个微小优化方向。
+  - score 75-89：优化顾问。至少 1 条 keep + 1 条 improve。重点找”方向对但表达不够强”的片段。summary 肯定匹配基础，同时指出具体提升方向。
+  - score 45-74：诊断顾问。可 keep/improve/remove。重点指出与 JD 差距明显之处：缺项目深度/量化结果/核心技能。summary 诚实列差距和补强建议。
+  - score < 45：方向顾问。不要假装匹配。优先标注说明”方向不匹配”的原文。jobDirection 列最大 3 条硬性差距，建议换岗位方向或补技能。summary 坦诚给方向建议。
+22. summary 语气必须与 score 区间一致，不得与 annotations 的判断互相矛盾。高分不虚夸，中分鼓励为主，低分诚实不羞辱。
 
 segments.status 只能是 relevant、optimize、irrelevant。
 annotations.status 只能是 keep、improve、remove。
@@ -73,8 +84,19 @@ score 必须是 0 到 100 的数字。
 suggestions.count 必须是数字。
 resumeOriginal 必须是空字符串，不要把完整 resumeText 放入 JSON。
 
+重要：annotations 和 segments 是必须输出的核心字段，禁止返回空数组 []。
+
 完整目标 JSON object 示例结构：
 ${outputShapeDescription}`;
+
+export function buildEmptyAnnotationsRepairPrompt(): string {
+  return `
+
+[重试指令] 上一次输出 annotations 为空数组。
+请输出 2-4 条 annotations，至少 1 条 keep 或 1 条 improve。
+original 必须逐字引用简历连续原文，优先 15-60 字片段。
+每条只分析一件事。保留字段长度限制：relatedJdNeed≤30、reason≤50、suggestion≤70、rewriteExample≤90。`;
+}
 
 function buildOriginalCorrectionPrompt(issues: SegmentOriginalIssue[]): string {
   if (issues.length === 0) {
@@ -126,5 +148,7 @@ export function buildAnalysisUserPrompt(
 ${request.resumeText}
 
 岗位 JD：
-${request.jobDescription}${buildOriginalCorrectionPrompt(originalIssues)}${buildJsonRepairPrompt(jsonRepairReason)}`;
+${request.jobDescription}${buildOriginalCorrectionPrompt(originalIssues)}${buildJsonRepairPrompt(jsonRepairReason)}
+
+重要：annotations 和 segments 禁止返回空数组 []。至少输出 1 条 annotation 和 1 条 segment。根据 score 选择策略：高分润色、中分优化、低分诚实指出方向差距。`;
 }

@@ -38,7 +38,7 @@ export type ResumeAnnotation = {
   relatedJdNeed: string;
   reason: string;
   suggestion: string;
-  rewriteExample: string;
+  rewriteExample?: string;
   section?: string;
   startIndex?: number;
   endIndex?: number;

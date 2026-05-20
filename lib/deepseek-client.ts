@@ -193,7 +193,7 @@ async function requestDeepSeekAnalysis(
   const requestBody = {
     model: config.model,
     messages: buildMessages(request, originalIssues, jsonRepairReason),
-    max_tokens: 4096,
+    max_tokens: 8192,
     response_format: { type: "json_object" as const },
     stream: false,
     temperature: 0.2

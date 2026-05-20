@@ -97,7 +97,7 @@ function isResumeAnnotation(value: unknown): value is ResumeAnnotation {
     typeof value.relatedJdNeed !== "string" ||
     typeof value.reason !== "string" ||
     typeof value.suggestion !== "string" ||
-    typeof value.rewriteExample !== "string" ||
+    (value.rewriteExample !== undefined && typeof value.rewriteExample !== "string") ||
     (value.section !== undefined && typeof value.section !== "string") ||
     !isOptionalNumber(value.startIndex) ||
     !isOptionalNumber(value.endIndex)
@@ -105,8 +105,10 @@ function isResumeAnnotation(value: unknown): value is ResumeAnnotation {
     return false;
   }
 
-  if (value.status === "improve" && value.rewriteExample.trim().length === 0) {
-    return false;
+  if (value.status === "improve") {
+    if (typeof value.rewriteExample !== "string" || value.rewriteExample.trim().length === 0) {
+      return false;
+    }
   }
 
   return true;
