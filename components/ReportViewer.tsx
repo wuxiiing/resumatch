@@ -39,25 +39,37 @@ const annotationMeta: Record<
     tone: string;
     text: string;
     badge: string;
+    highlight: string;
+    blockBorder: string;
+    blockBg: string;
   }
 > = {
   keep: {
-    label: "建议保留",
-    tone: "border-emerald-200 bg-emerald-50",
+    label: "建议保留并强化",
+    tone: "border-emerald-200 bg-emerald-100/60",
     text: "text-emerald-800",
-    badge: "border-emerald-200 bg-emerald-50 text-emerald-700"
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    highlight: "border-emerald-300 bg-emerald-100/70 text-emerald-800",
+    blockBorder: "border-emerald-300",
+    blockBg: "bg-emerald-50/60"
   },
   improve: {
     label: "建议优化",
-    tone: "border-amber-200 bg-amber-50",
+    tone: "border-amber-200 bg-amber-100/60",
     text: "text-amber-900",
-    badge: "border-amber-200 bg-amber-50 text-amber-700"
+    badge: "border-amber-200 bg-amber-50 text-amber-700",
+    highlight: "border-amber-300 bg-amber-100/70 text-amber-900",
+    blockBorder: "border-amber-300",
+    blockBg: "bg-amber-50/60"
   },
   remove: {
-    label: "建议弱化或删除",
-    tone: "border-slate-200 bg-slate-100",
-    text: "text-slate-700",
-    badge: "border-slate-200 bg-slate-50 text-slate-600"
+    label: "建议弱化",
+    tone: "border-slate-200 bg-slate-200/60",
+    text: "text-slate-600",
+    badge: "border-slate-200 bg-slate-100 text-slate-500",
+    highlight: "border-slate-300 bg-slate-200/70 text-slate-600",
+    blockBorder: "border-slate-300",
+    blockBg: "bg-slate-50/80"
   }
 };
 
@@ -73,34 +85,53 @@ type TextPiece =
       type: "annotation";
     };
 
-function getValidAnnotations(
+function isValidAnnotationIndex(
+  annotation: ResumeAnnotation,
+  resumeOriginal: string
+): boolean {
+  return (
+    Number.isInteger(annotation.startIndex) &&
+    Number.isInteger(annotation.endIndex) &&
+    annotation.startIndex !== undefined &&
+    annotation.endIndex !== undefined &&
+    annotation.startIndex >= 0 &&
+    annotation.endIndex > annotation.startIndex &&
+    annotation.endIndex <= resumeOriginal.length
+  );
+}
+
+function categorizeAnnotations(
   resumeOriginal: string,
-  annotations: ResumeAnnotation[] = []
-): ResumeAnnotation[] {
+  annotations: ResumeAnnotation[]
+): { valid: ResumeAnnotation[]; unlocated: ResumeAnnotation[] } {
+  const indexable: ResumeAnnotation[] = [];
+  const unlocated: ResumeAnnotation[] = [];
+
+  for (const annotation of annotations) {
+    if (isValidAnnotationIndex(annotation, resumeOriginal)) {
+      indexable.push(annotation);
+    } else {
+      unlocated.push(annotation);
+    }
+  }
+
+  const sorted = indexable.sort(
+    (a, b) => (a.startIndex ?? 0) - (b.startIndex ?? 0)
+  );
+
+  const valid: ResumeAnnotation[] = [];
   let cursor = 0;
 
-  return annotations
-    .filter(
-      (annotation) =>
-        Number.isInteger(annotation.startIndex) &&
-        Number.isInteger(annotation.endIndex) &&
-        annotation.startIndex !== undefined &&
-        annotation.endIndex !== undefined &&
-        annotation.startIndex >= 0 &&
-        annotation.endIndex > annotation.startIndex &&
-        annotation.endIndex <= resumeOriginal.length
-    )
-    .sort((a, b) => (a.startIndex ?? 0) - (b.startIndex ?? 0))
-    .filter((annotation) => {
-      const startIndex = annotation.startIndex ?? 0;
+  for (const annotation of sorted) {
+    const start = annotation.startIndex ?? 0;
 
-      if (startIndex < cursor) {
-        return false;
-      }
-
+    if (start >= cursor) {
+      valid.push(annotation);
       cursor = annotation.endIndex ?? cursor;
-      return true;
-    });
+    }
+  }
+
+  return { valid, unlocated };
 }
 
 function splitResumeText(
@@ -148,6 +179,104 @@ function hasAnnotatedResume(
   return Boolean(resumeOriginal?.trim()) && Boolean(annotations?.length);
 }
 
+function InlineSuggestion({
+  annotation,
+  index
+}: {
+  annotation: ResumeAnnotation;
+  index: number;
+}) {
+  const meta = annotationMeta[annotation.status];
+
+  return (
+    <div
+      className={`ml-2 border-l-2 ${meta.blockBorder} ${meta.blockBg} my-2 rounded-r-[8px] px-3 py-2 text-sm leading-6`}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}
+        >
+          {meta.label}
+        </span>
+        <span className="text-[11px] text-slate-400">#{index + 1}</span>
+      </div>
+
+      {annotation.reason ? (
+        <p className="mt-1.5 text-slate-700">{annotation.reason}</p>
+      ) : null}
+
+      {annotation.suggestion ? (
+        <p className="mt-1.5 text-slate-600">
+          <span className="font-medium text-slate-700">建议：</span>
+          {annotation.suggestion}
+        </p>
+      ) : null}
+
+      {annotation.status === "improve" && annotation.rewriteExample ? (
+        <div className="mt-2 rounded-[10px] border border-amber-200 bg-white/80 p-3 text-sm leading-6 text-slate-700">
+          <p className="text-xs font-semibold text-amber-700">参考改写</p>
+          <p className="mt-1">{annotation.rewriteExample}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function UnlocatedAnnotations({
+  annotations
+}: {
+  annotations: ResumeAnnotation[];
+}) {
+  if (annotations.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-[12px] border border-slate-200 bg-slate-50/60 p-4">
+      <h3 className="text-sm font-semibold text-slate-600">
+        未定位批改建议
+        <span className="ml-1.5 text-xs font-normal text-slate-400">
+          （{annotations.length} 条无法映射到原文位置）
+        </span>
+      </h3>
+      <div className="mt-3 space-y-3">
+        {annotations.map((annotation) => {
+          const meta = annotationMeta[annotation.status];
+
+          return (
+            <div
+              className={`rounded-[10px] border p-3 ${meta.tone}`}
+              key={annotation.id}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}
+                >
+                  {meta.label}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {annotation.section || "未归类"}
+                </span>
+              </div>
+              {annotation.original ? (
+                <p className="mt-2 text-[13px] leading-6 text-slate-500">
+                  <span className="font-medium text-slate-500">原文片段：</span>
+                  {annotation.original.length > 120
+                    ? `${annotation.original.slice(0, 120)}…`
+                    : annotation.original}
+                </p>
+              ) : null}
+              {annotation.reason ? (
+                <p className="mt-1.5 text-[13px] leading-6 text-slate-600">
+                  {annotation.reason}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AnnotatedResumeView({
   annotations,
   resumeOriginal
@@ -155,10 +284,13 @@ function AnnotatedResumeView({
   annotations: ResumeAnnotation[];
   resumeOriginal: string;
 }) {
-  const validAnnotations = getValidAnnotations(resumeOriginal, annotations);
-  const pieces = splitResumeText(resumeOriginal, validAnnotations);
+  const { valid, unlocated } = categorizeAnnotations(
+    resumeOriginal,
+    annotations
+  );
+  const pieces = splitResumeText(resumeOriginal, valid);
 
-  if (validAnnotations.length === 0) {
+  if (valid.length === 0) {
     return (
       <section className="rounded-[14px] border border-line bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.035)]">
         <div className="border-b border-line pb-4">
@@ -170,6 +302,7 @@ function AnnotatedResumeView({
         <div className="mt-5 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
           {resumeOriginal}
         </div>
+        <UnlocatedAnnotations annotations={unlocated} />
       </section>
     );
   }
@@ -179,70 +312,38 @@ function AnnotatedResumeView({
       <div className="border-b border-line pb-4">
         <h2 className="text-base font-semibold text-ink">简历原文批改</h2>
         <p className="mt-1 text-sm text-muted">
-          按原文顺序标出需要保留、优化或弱化的内容，未命中的文本保持原样。
+          按原文顺序阅读，高亮片段为分析命中位置，批改意见紧附其后。
         </p>
       </div>
 
       <div className="mt-5 whitespace-pre-wrap break-words rounded-[12px] border border-line bg-slate-50/45 p-4 text-sm leading-7 text-slate-700">
-        {pieces.map((piece, index) => {
+        {pieces.map((piece, idx) => {
           if (piece.type === "plain") {
-            return <span key={`plain-${index}`}>{piece.text}</span>;
+            return <span key={`plain-${idx}`}>{piece.text}</span>;
           }
 
           const meta = annotationMeta[piece.annotation.status];
 
           return (
-            <mark
-              className={`rounded-[6px] border px-1.5 py-0.5 ${meta.tone} ${meta.text}`}
-              key={piece.annotation.id}
-            >
-              {piece.text}
-              <sup className="ml-0.5 text-[10px] font-semibold">
-                {piece.index + 1}
-              </sup>
-            </mark>
+            <span key={piece.annotation.id}>
+              <mark
+                className={`rounded-[6px] border px-1.5 py-0.5 ${meta.highlight}`}
+              >
+                {piece.text}
+                <sup className="ml-0.5 text-[10px] font-semibold opacity-70">
+                  {piece.index + 1}
+                </sup>
+              </mark>
+              <InlineSuggestion
+                annotation={piece.annotation}
+                index={piece.index}
+              />
+            </span>
           );
         })}
       </div>
 
-      <div className="mt-5 space-y-3">
-        {validAnnotations.map((annotation, index) => {
-          const meta = annotationMeta[annotation.status];
-
-          return (
-            <article
-              className={`rounded-[12px] border p-4 ${meta.tone}`}
-              key={annotation.id}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-ink">
-                  {index + 1}. {annotation.section || "简历原文"}
-                </h3>
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${meta.badge}`}
-                >
-                  {meta.label}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-700">
-                {annotation.reason}
-              </p>
-              {annotation.suggestion ? (
-                <p className="mt-2 text-sm leading-6 text-slate-700">
-                  <span className="font-medium text-slate-800">建议：</span>
-                  {annotation.suggestion}
-                </p>
-              ) : null}
-              {annotation.status === "improve" && annotation.rewriteExample ? (
-                <div className="mt-3 rounded-[10px] border border-amber-200 bg-white/80 p-3 text-sm leading-6 text-slate-700">
-                  <p className="text-xs font-semibold text-amber-700">参考改写</p>
-                  <p className="mt-2">{annotation.rewriteExample}</p>
-                </div>
-              ) : null}
-            </article>
-          );
-        })}
-      </div>
+      <UnlocatedAnnotations annotations={unlocated} />
     </section>
   );
 }
@@ -316,9 +417,9 @@ export function ReportViewer({
 
 export function ReportLegend() {
   const items = [
-    { color: "bg-emerald-500", text: "绿色：建议保留" },
-    { color: "bg-amber-500", text: "黄色：展示问题、建议和参考改写" },
-    { color: "bg-slate-400", text: "灰色：建议弱化或删除" }
+    { color: "bg-emerald-500", text: "绿色：与 JD 高度相关，建议保留并强化" },
+    { color: "bg-amber-500", text: "黄色：内容有价值，建议优化表达" },
+    { color: "bg-slate-400", text: "灰色：与目标岗位关联度较低，建议弱化" }
   ];
 
   return (
