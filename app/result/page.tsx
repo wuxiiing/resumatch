@@ -50,7 +50,10 @@ function isResumeAnnotation(value: unknown): value is ResumeAnnotation {
     typeof value.relatedJdNeed === "string" &&
     typeof value.reason === "string" &&
     typeof value.suggestion === "string" &&
-    typeof value.rewriteExample === "string" &&
+    (value.rewriteExample === undefined || typeof value.rewriteExample === "string") &&
+    (value.status !== "improve" ||
+      (typeof value.rewriteExample === "string" &&
+        value.rewriteExample.trim().length > 0)) &&
     (value.section === undefined || typeof value.section === "string") &&
     (value.startIndex === undefined || typeof value.startIndex === "number") &&
     (value.endIndex === undefined || typeof value.endIndex === "number")
@@ -70,6 +73,7 @@ function isStoredAnalysisReport(value: unknown): value is AnalysisReport {
     Array.isArray(value.segments) &&
     value.segments.every(isReportSegment) &&
     (value.resumeOriginal === undefined || typeof value.resumeOriginal === "string") &&
+    (value.resumeDisplayText === undefined || typeof value.resumeDisplayText === "string") &&
     (value.annotations === undefined ||
       (Array.isArray(value.annotations) && value.annotations.every(isResumeAnnotation)))
   );
@@ -127,7 +131,8 @@ export default function ResultPage() {
   }, []);
 
   const displayableSegments = getDisplayableSegments(report);
-  const hasResumeReview = Boolean(report.resumeOriginal?.trim() && report.annotations?.length);
+  const resumeReviewText = report.resumeDisplayText || report.resumeOriginal;
+  const hasResumeReview = Boolean(resumeReviewText?.trim() && report.annotations?.length);
   const hasMainContent = hasResumeReview || displayableSegments.length > 0;
 
   return (
@@ -165,7 +170,7 @@ export default function ResultPage() {
                 {hasMainContent ? (
                   <ReportViewer
                     annotations={report.annotations}
-                    resumeOriginal={report.resumeOriginal}
+                    resumeOriginal={resumeReviewText}
                     segments={displayableSegments}
                   />
                 ) : (

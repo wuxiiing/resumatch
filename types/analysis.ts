@@ -48,6 +48,7 @@ export type AnalysisReport = {
   score: number;
   summary: string;
   resumeOriginal?: string;
+  resumeDisplayText?: string;
   jobDirection: JobDirectionItem[];
   matchedKeywords: string[];
   missingKeywords: string[];

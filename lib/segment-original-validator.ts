@@ -23,10 +23,6 @@ export type AnnotationOriginalValidation = {
 
 const MIN_NORMALIZED_CHARS_FOR_FUZZY = 6;
 
-function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 function unifyPunctuation(str: string): string {
   return str
     .replace(/。/g, ".") // 。
@@ -104,36 +100,22 @@ function buildNormalizedMappingByPrefix(
   return { normalized, toOriginal };
 }
 
-function matchesResumeText(resumeText: string, original: string): boolean {
+function matchesReviewText(reviewText: string, original: string): boolean {
   const trimmedOriginal = original.trim();
 
   if (!trimmedOriginal) {
     return false;
   }
 
-  if (resumeText.includes(trimmedOriginal)) {
-    return true;
-  }
-
-  if (normalizeWhitespace(resumeText).includes(normalizeWhitespace(trimmedOriginal))) {
-    return true;
-  }
-
-  const normalizedOriginal = normalizeForMatching(trimmedOriginal);
-
-  if ([...normalizedOriginal].length < MIN_NORMALIZED_CHARS_FOR_FUZZY) {
-    return false;
-  }
-
-  return normalizeForMatching(resumeText).includes(normalizedOriginal);
+  return reviewText.includes(trimmedOriginal);
 }
 
 export function validateSegmentOriginals(
   report: AnalysisReport,
-  resumeText: string
+  reviewText: string
 ): SegmentOriginalValidation {
   const issues = report.segments
-    .filter((segment) => !matchesResumeText(resumeText, segment.original))
+    .filter((segment) => !matchesReviewText(reviewText, segment.original))
     .map((segment) => ({
       id: segment.id,
       original: segment.original
@@ -147,10 +129,10 @@ export function validateSegmentOriginals(
 
 export function filterUnmatchedSegments(
   report: AnalysisReport,
-  resumeText: string
+  reviewText: string
 ): AnalysisReport {
   const matchedSegments = report.segments.filter((segment: ReportSegment) =>
-    matchesResumeText(resumeText, segment.original)
+    matchesReviewText(reviewText, segment.original)
   );
 
   return {
@@ -161,7 +143,7 @@ export function filterUnmatchedSegments(
 
 export function locateResumeAnnotations(
   report: AnalysisReport,
-  resumeText: string
+  reviewText: string
 ): AnnotationOriginalValidation {
   const issues: AnnotationOriginalIssue[] = [];
   let nextSearchIndex = 0;
@@ -169,7 +151,7 @@ export function locateResumeAnnotations(
 
   function getNormalizedMapping(): NormalizedMapping {
     if (!normalizedMapping) {
-      normalizedMapping = buildNormalizedMapping(resumeText);
+      normalizedMapping = buildNormalizedMapping(reviewText);
     }
     return normalizedMapping;
   }
@@ -184,37 +166,22 @@ export function locateResumeAnnotations(
       }
 
       // Step 1: exact match
-      const exactStart = resumeText.indexOf(original, nextSearchIndex);
+      const trimmedOriginal = original.trim();
+      const exactStart = reviewText.indexOf(trimmedOriginal, nextSearchIndex);
 
       if (exactStart >= 0) {
-        const endIndex = exactStart + original.length;
+        const endIndex = exactStart + trimmedOriginal.length;
         nextSearchIndex = endIndex;
-        items.push({ ...annotation, startIndex: exactStart, endIndex });
+        items.push({
+          ...annotation,
+          original: reviewText.slice(exactStart, endIndex),
+          startIndex: exactStart,
+          endIndex
+        });
         return items;
       }
 
-      // Step 2: whitespace-normalized match
-      const wsNormalizedOriginal = normalizeWhitespace(original);
-      const wsNormalizedResume = normalizeWhitespace(resumeText);
-      const wsStart = wsNormalizedResume.indexOf(wsNormalizedOriginal);
-
-      if (wsStart >= 0 && [...wsNormalizedOriginal].length >= MIN_NORMALIZED_CHARS_FOR_FUZZY) {
-        const mapping = getNormalizedMapping();
-
-        const mapped = mapNormalizedRange(mapping, wsNormalizedOriginal, resumeText);
-
-        if (mapped) {
-          nextSearchIndex = mapped.endIndex;
-          items.push({
-            ...annotation,
-            startIndex: mapped.startIndex,
-            endIndex: mapped.endIndex
-          });
-          return items;
-        }
-      }
-
-      // Step 3: full normalized match (NFKC + punctuation + whitespace)
+      // Step 2: normalized match (NFKC + punctuation + whitespace)
       const normalizedOriginal = normalizeForMatching(original);
 
       if ([...normalizedOriginal].length < MIN_NORMALIZED_CHARS_FOR_FUZZY) {
@@ -223,7 +190,10 @@ export function locateResumeAnnotations(
       }
 
       const mapping = getNormalizedMapping();
-      const normStart = mapping.normalized.indexOf(normalizedOriginal);
+      const normalizedSearchStart = normalizeForMatching(
+        reviewText.slice(0, nextSearchIndex)
+      ).length;
+      const normStart = mapping.normalized.indexOf(normalizedOriginal, normalizedSearchStart);
 
       if (normStart < 0) {
         issues.push({ id: annotation.id, original });
@@ -235,7 +205,7 @@ export function locateResumeAnnotations(
       const origEnd = mapping.toOriginal[normEnd - 1] + 1;
 
       // Safety: verify the mapped slice normalizes to the same value
-      const sliced = resumeText.slice(origStart, origEnd);
+      const sliced = reviewText.slice(origStart, origEnd);
       if (normalizeForMatching(sliced) !== normalizedOriginal) {
         issues.push({ id: annotation.id, original });
         return items;
@@ -245,6 +215,7 @@ export function locateResumeAnnotations(
 
       items.push({
         ...annotation,
+        original: reviewText.slice(origStart, origEnd),
         startIndex: origStart,
         endIndex: origEnd
       });
@@ -262,27 +233,4 @@ export function locateResumeAnnotations(
     },
     issues
   };
-}
-
-function mapNormalizedRange(
-  mapping: NormalizedMapping,
-  normalizedNeedle: string,
-  resumeText: string
-): { startIndex: number; endIndex: number } | null {
-  const normStart = mapping.normalized.indexOf(normalizedNeedle);
-
-  if (normStart < 0) {
-    return null;
-  }
-
-  const normEnd = normStart + normalizedNeedle.length;
-  const origStart = mapping.toOriginal[normStart];
-  const origEnd = mapping.toOriginal[normEnd - 1] + 1;
-
-  const sliced = resumeText.slice(origStart, origEnd);
-  if (normalizeWhitespace(sliced) !== normalizedNeedle) {
-    return null;
-  }
-
-  return { startIndex: origStart, endIndex: origEnd };
 }

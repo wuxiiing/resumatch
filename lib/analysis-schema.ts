@@ -164,6 +164,13 @@ export function validateAnalysisReport(report: unknown): ValidationResult<Analys
     return { ok: false, error: "分析结果 resumeOriginal 必须是字符串。" };
   }
 
+  if (
+    report.resumeDisplayText !== undefined &&
+    typeof report.resumeDisplayText !== "string"
+  ) {
+    return { ok: false, error: "分析结果 resumeDisplayText 必须是字符串。" };
+  }
+
   if (!Array.isArray(report.jobDirection) || !report.jobDirection.every(isJobDirectionItem)) {
     return { ok: false, error: "分析结果 jobDirection 结构不正确。" };
   }

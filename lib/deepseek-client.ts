@@ -28,6 +28,17 @@ type ParsedModelJson = {
 };
 
 type ModelReportObject = Record<string, unknown>;
+type ContactInfo = {
+  emails: string[];
+  phones: string[];
+  urls: string[];
+  githubs: string[];
+};
+
+type RewriteSource = {
+  original: string;
+  rewriteExample?: string;
+};
 
 export type DeepSeekConfig = {
   apiKey: string;
@@ -138,15 +149,148 @@ function isModelReportObject(value: unknown): value is ModelReportObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function withServerResumeOriginal(payload: unknown, resumeText: string): unknown {
-  if (!isModelReportObject(payload)) {
+function countWithoutWhitespace(value: string): number {
+  return Array.from(value.replace(/\s+/g, "")).length;
+}
+
+function normalizeComparable(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function uniqueMatches(value: string, pattern: RegExp): string[] {
+  return Array.from(new Set(value.match(pattern) ?? []));
+}
+
+function extractContactInfo(value: string): ContactInfo {
+  return {
+    emails: uniqueMatches(value, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi),
+    phones: uniqueMatches(value, /(?:\+?\d[\d\s().-]{6,}\d)/g).map((phone) =>
+      phone.replace(/\D/g, "")
+    ),
+    urls: uniqueMatches(value, /https?:\/\/[^\s)]+/gi),
+    githubs: uniqueMatches(value, /github\.com\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?/gi)
+  };
+}
+
+function hasContactInfoLoss(original: string, displayText: string): boolean {
+  const normalizedDisplay = normalizeComparable(displayText);
+  const originalInfo = extractContactInfo(original);
+
+  return (
+    originalInfo.emails.some((email) => !normalizedDisplay.includes(normalizeComparable(email))) ||
+    originalInfo.phones.some((phone) => !displayText.replace(/\D/g, "").includes(phone)) ||
+    originalInfo.urls.some((url) => !normalizedDisplay.includes(normalizeComparable(url))) ||
+    originalInfo.githubs.some((github) => !normalizedDisplay.includes(normalizeComparable(github)))
+  );
+}
+
+const analysisPollutionPattern =
+  /以下是整理后的简历|以下是分析结果|这份简历的匹配度|针对该\s*JD|根据岗位要求|建议你修改简历|本报告认为|该候选人|岗位匹配度|JD\s*分析|简历分析报告/gi;
+
+function countPatternMatches(value: string, pattern: RegExp): number {
+  return value.match(new RegExp(pattern.source, pattern.flags))?.length ?? 0;
+}
+
+function containsNewAnalysisPollution(displayText: string, resumeText: string): boolean {
+  const displayMatches = countPatternMatches(displayText, analysisPollutionPattern);
+
+  return displayMatches > countPatternMatches(resumeText, analysisPollutionPattern);
+}
+
+function isSafeResumeDisplayText(value: unknown, resumeText: string): value is string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return false;
+  }
+
+  const originalCharCount = countWithoutWhitespace(resumeText);
+  const displayCharCount = countWithoutWhitespace(value);
+
+  if (originalCharCount === 0 || displayCharCount === 0) {
+    return false;
+  }
+
+  const ratio = displayCharCount / originalCharCount;
+
+  if (ratio < 0.9 || ratio > 1.1) {
+    return false;
+  }
+
+  if (containsNewAnalysisPollution(value, resumeText)) {
+    return false;
+  }
+
+  return !hasContactInfoLoss(resumeText, value);
+}
+
+function compactClaimText(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function extractQuantitativeClaims(value: string): string[] {
+  return Array.from(
+    new Set(
+      value.match(
+        /\d+(?:[.,]\d+)?\s*(?:%|％|k|K|w|W|万|千|百|人|位|个|次|小时|分钟|天|周|月|年|倍|名|元|美元|排名)?/g
+      ) ?? []
+    )
+  ).map((claim) => compactClaimText(claim));
+}
+
+function hasUnsupportedQuantitativeClaim(rewriteExample: string, sourceText: string): boolean {
+  const source = compactClaimText(sourceText);
+  return extractQuantitativeClaims(rewriteExample).some((claim) => !source.includes(claim));
+}
+
+function sanitizeRewriteExamples(payload: ModelReportObject, resumeDisplayText: string): ModelReportObject {
+  if (!Array.isArray(payload.annotations)) {
     return payload;
   }
 
   return {
     ...payload,
-    resumeOriginal: resumeText
+    annotations: payload.annotations.map((annotation) => {
+      if (!isModelReportObject(annotation)) {
+        return annotation;
+      }
+
+      const source: RewriteSource = {
+        original: typeof annotation.original === "string" ? annotation.original : "",
+        rewriteExample:
+          typeof annotation.rewriteExample === "string" ? annotation.rewriteExample : undefined
+      };
+
+      if (
+        typeof source.rewriteExample !== "string" ||
+        !hasUnsupportedQuantitativeClaim(
+          source.rewriteExample,
+          `${source.original}\n${resumeDisplayText}`
+        )
+      ) {
+        return annotation;
+      }
+
+      return {
+        ...annotation,
+        rewriteExample: "可补充真实数据：如使用人数、效率提升比例、反馈结果等。"
+      };
+    })
   };
+}
+
+function withServerResumeOriginal(payload: unknown, resumeText: string): unknown {
+  if (!isModelReportObject(payload)) {
+    return payload;
+  }
+
+  const resumeDisplayText = isSafeResumeDisplayText(payload.resumeDisplayText, resumeText)
+    ? payload.resumeDisplayText
+    : resumeText;
+
+  return sanitizeRewriteExamples({
+    ...payload,
+    resumeOriginal: resumeText,
+    resumeDisplayText
+  }, resumeDisplayText);
 }
 
 function parseDeepSeekContent(
@@ -247,11 +391,13 @@ export async function analyzeWithDeepSeek(
         continue;
       }
 
-      const originalValidation = validateSegmentOriginals(validation.data, request.resumeText);
+      const reviewText =
+        validation.data.resumeDisplayText || validation.data.resumeOriginal || request.resumeText;
+      const originalValidation = validateSegmentOriginals(validation.data, reviewText);
 
       const annotationValidation = locateResumeAnnotations(
         validation.data,
-        request.resumeText
+        reviewText
       );
 
       if (originalValidation.ok && annotationValidation.ok) {
@@ -271,10 +417,10 @@ export async function analyzeWithDeepSeek(
       if (attempt === 1) {
         const reportWithMatchedSegments = originalValidation.ok
           ? validation.data
-          : filterUnmatchedSegments(validation.data, request.resumeText);
+          : filterUnmatchedSegments(validation.data, reviewText);
         const filteredReport = locateResumeAnnotations(
           reportWithMatchedSegments,
-          request.resumeText
+          reviewText
         ).report;
         const filteredValidation = validateAnalysisReport(filteredReport);
 
