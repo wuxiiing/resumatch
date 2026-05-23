@@ -1,5 +1,6 @@
 import type {
   AnnotationStatus,
+  RequirementCheck,
   ReportSegment,
   ResumeAnnotation,
   SegmentStatus
@@ -7,6 +8,7 @@ import type {
 
 type ReportViewerProps = {
   annotations?: ResumeAnnotation[];
+  requirementChecks?: RequirementCheck[];
   resumeOriginal?: string;
   segments: ReportSegment[];
 };
@@ -179,6 +181,33 @@ function hasAnnotatedResume(
   return Boolean(resumeOriginal?.trim()) && Boolean(annotations?.length);
 }
 
+function getMissingRequirementChecks(
+  requirementChecks: RequirementCheck[] | undefined
+): RequirementCheck[] {
+  return (
+    requirementChecks?.filter(
+      (check) => check.status === "missing" && isMeaningfulText(check.label)
+    ) ?? []
+  );
+}
+
+function isMeaningfulText(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+
+  return Boolean(
+    normalized &&
+      !["无", "无需", "不需要修改", "n/a", "-", "na"].includes(normalized)
+  );
+}
+
+function getPriorityText(priority: RequirementCheck["priority"]) {
+  return {
+    context: "用于补足岗位上下文和业务理解。",
+    must: "通常属于 JD 的核心筛选条件。",
+    preferred: "能提升匹配度和面试追问空间。"
+  }[priority];
+}
+
 function InlineSuggestion({
   annotation,
   index
@@ -277,11 +306,50 @@ function UnlocatedAnnotations({
   );
 }
 
+function SupplementSuggestions({
+  requirementChecks
+}: {
+  requirementChecks?: RequirementCheck[];
+}) {
+  const missingChecks = getMissingRequirementChecks(requirementChecks);
+
+  if (missingChecks.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-[12px] border border-rose-200 bg-rose-50/55 p-4">
+      <h3 className="text-sm font-semibold text-rose-700">补充建议</h3>
+      <div className="mt-3 space-y-3">
+        {missingChecks.map((check) => (
+          <article
+            className="rounded-[10px] border border-rose-100 bg-white/80 p-3"
+            key={`${check.priority}-${check.label}`}
+          >
+            <p className="text-sm font-semibold text-slate-800">
+              缺什么：{check.label}
+            </p>
+            <p className="mt-1.5 text-[13px] leading-6 text-slate-600">
+              为什么 JD 看重：
+              {isMeaningfulText(check.note)
+                ? check.note
+                : getPriorityText(check.priority)}
+            </p>
+            <p className="mt-1.5 text-[13px] leading-6 text-slate-600">
+              建议方向：优先通过学习、补证或补项目经历补齐这类证据，再写入可验证的项目成果。
+            </p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AnnotatedResumeView({
   annotations,
+  requirementChecks,
   resumeOriginal
 }: {
   annotations: ResumeAnnotation[];
+  requirementChecks?: RequirementCheck[];
   resumeOriginal: string;
 }) {
   const { valid, unlocated } = categorizeAnnotations(
@@ -303,6 +371,7 @@ function AnnotatedResumeView({
           {resumeOriginal}
         </div>
         <UnlocatedAnnotations annotations={unlocated} />
+        <SupplementSuggestions requirementChecks={requirementChecks} />
       </section>
     );
   }
@@ -344,11 +413,18 @@ function AnnotatedResumeView({
       </div>
 
       <UnlocatedAnnotations annotations={unlocated} />
+      <SupplementSuggestions requirementChecks={requirementChecks} />
     </section>
   );
 }
 
-function SegmentFallbackView({ segments }: { segments: ReportSegment[] }) {
+function SegmentFallbackView({
+  requirementChecks,
+  segments
+}: {
+  requirementChecks?: RequirementCheck[];
+  segments: ReportSegment[];
+}) {
   return (
     <section className="rounded-[14px] border border-line bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.035)]">
       <div className="border-b border-line pb-4">
@@ -394,12 +470,14 @@ function SegmentFallbackView({ segments }: { segments: ReportSegment[] }) {
           );
         })}
       </div>
+      <SupplementSuggestions requirementChecks={requirementChecks} />
     </section>
   );
 }
 
 export function ReportViewer({
   annotations,
+  requirementChecks,
   resumeOriginal,
   segments
 }: ReportViewerProps) {
@@ -407,19 +485,26 @@ export function ReportViewer({
     return (
       <AnnotatedResumeView
         annotations={annotations ?? []}
+        requirementChecks={requirementChecks}
         resumeOriginal={resumeOriginal ?? ""}
       />
     );
   }
 
-  return <SegmentFallbackView segments={segments} />;
+  return (
+    <SegmentFallbackView
+      requirementChecks={requirementChecks}
+      segments={segments}
+    />
+  );
 }
 
 export function ReportLegend() {
   const items = [
-    { color: "bg-emerald-500", text: "绿色：与 JD 高度相关，建议保留并强化" },
-    { color: "bg-amber-500", text: "黄色：内容有价值，建议优化表达" },
-    { color: "bg-slate-400", text: "灰色：与目标岗位关联度较低，建议弱化" }
+    { color: "bg-emerald-500", text: "绿色：已覆盖关键词" },
+    { color: "bg-amber-500", text: "黄色：待优化/表达补强" },
+    { color: "bg-rose-500", text: "红色：补充建议" },
+    { color: "bg-slate-400", text: "灰色：弱相关" }
   ];
 
   return (

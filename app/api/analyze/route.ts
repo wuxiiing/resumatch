@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 
-import type { AnalyzeRequest } from "@/lib/analysis-schema";
 import {
   validateAnalysisReport,
   validateAnalyzeRequest
 } from "@/lib/analysis-schema";
 import { analyzeWithDeepSeek, DeepSeekClientError } from "@/lib/deepseek-client";
-import { buildEmptyAnnotationsRepairPrompt } from "@/lib/analysis-prompt";
 
 export const runtime = "nodejs";
 
@@ -26,28 +24,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    let analysisReport = await analyzeWithDeepSeek(requestValidation.data);
-    const firstAnnotationCount = analysisReport.annotations?.length ?? 0;
-
-    if (firstAnnotationCount === 0) {
-      console.log(`[retry] annotations=0, retrying...`);
-
-      const retryRequest: AnalyzeRequest = {
-        resumeText: requestValidation.data.resumeText,
-        jobDescription:
-          requestValidation.data.jobDescription + buildEmptyAnnotationsRepairPrompt()
-      };
-
-      try {
-        analysisReport = await analyzeWithDeepSeek(retryRequest);
-        const retryAnnotationCount = analysisReport.annotations?.length ?? 0;
-        console.log(
-          `[retry] annotations=${retryAnnotationCount}, finish_reason=stop`
-        );
-      } catch {
-        console.log(`[retry] 重试调用失败，使用第一次结果`);
-      }
-    }
+    const analysisReport = await analyzeWithDeepSeek(requestValidation.data);
 
     const reportValidation = validateAnalysisReport(analysisReport);
 

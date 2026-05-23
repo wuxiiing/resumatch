@@ -26,6 +26,15 @@ type FileUploaderProps = {
 const RESUME_CHAR_LIMIT = 3000;
 const RESUME_LIMIT_ERROR = "简历内容超过 3000 字，请精简后再上传。";
 
+function getPreviewText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+    .join("\n");
+}
+
 export function FileUploader({ onResumeChange }: FileUploaderProps) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -184,7 +193,7 @@ export function FileUploader({ onResumeChange }: FileUploaderProps) {
             <span>字数：{parsedResume.charCount}</span>
           </div>
           <div className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-[10px] border border-line bg-white p-3 text-xs leading-5 text-slate-700">
-            {parsedResume.text || "未解析到可预览的文本内容。"}
+            {getPreviewText(parsedResume.text) || "未解析到可预览的文本内容。"}
           </div>
         </div>
       ) : null}

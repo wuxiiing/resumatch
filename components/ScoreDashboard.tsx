@@ -12,6 +12,23 @@ type ScoreDashboardProps = {
 };
 
 export function ScoreDashboard({ report }: ScoreDashboardProps) {
+  const coveredKeywords = getKeywordItems([
+    ...report.matchedKeywords,
+    ...getRequirementLabels(report, "present")
+  ]);
+  const weakKeywords = getKeywordItems([
+    ...getRequirementLabels(report, "weak")
+  ]);
+  const missingKeywords = getKeywordItems(getMissingLabels(report));
+  const irrelevantKeywords = getKeywordItems([
+    ...(report.annotations ?? [])
+      .filter((annotation) => annotation.status === "remove")
+      .map((annotation) => annotation.relatedJdNeed || annotation.section || annotation.original),
+    ...report.segments
+      .filter((segment) => segment.status === "irrelevant")
+      .map((segment) => segment.section)
+  ]);
+
   return (
     <section className="overflow-hidden rounded-[14px] border border-line bg-white shadow-[0_12px_32px_rgba(15,23,42,0.045)]">
       <div className="grid min-w-0 lg:grid-cols-[224px_minmax(0,1fr)]">
@@ -34,22 +51,77 @@ export function ScoreDashboard({ report }: ScoreDashboardProps) {
       </div>
 
       <div className="border-t border-line bg-slate-50/45 px-5 py-4">
-        <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:gap-0">
+        <div
+          className="grid min-w-0 gap-4 lg:grid-cols-4 lg:gap-0"
+        >
           <KeywordStrip
-            items={report.matchedKeywords}
-            label="已匹配关键词"
+            items={coveredKeywords}
+            label="已覆盖关键词"
             tone="matched"
           />
           <KeywordStrip
             className="border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"
-            items={report.missingKeywords}
-            label="缺失关键词"
+            items={weakKeywords}
+            label="待优化/表达补强"
+            tone="weak"
+          />
+          <KeywordStrip
+            className="border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"
+            items={missingKeywords}
+            label="补充建议"
             tone="missing"
+          />
+          <KeywordStrip
+            className="border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"
+            items={irrelevantKeywords}
+            label="弱相关"
+            tone="irrelevant"
           />
         </div>
       </div>
     </section>
   );
+}
+
+function getRequirementLabels(
+  report: AnalysisReport,
+  status: "present" | "weak"
+): string[] {
+  return (
+    report.requirementChecks
+      ?.filter((check) => check.status === status)
+      .map((check) => check.label) ?? []
+  );
+}
+
+function getMissingLabels(report: AnalysisReport): string[] {
+  const missingChecks = report.requirementChecks
+    ?.filter((check) => check.status === "missing")
+    .map((check) => check.label);
+
+  return missingChecks && missingChecks.length > 0
+    ? missingChecks
+    : report.missingKeywords;
+}
+
+function getKeywordItems(items: string[]): string[] {
+  const seen = new Set<string>();
+
+  return items
+    .map((item) => item.trim())
+    .filter((item) => isMeaningfulText(item) && item.length <= 18)
+    .filter((item) => {
+      if (seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function isMeaningfulText(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+
+  return !["", "无", "无需", "不需要修改", "n/a", "-", "na"].includes(normalized);
 }
 
 function KeywordStrip({
@@ -61,7 +133,7 @@ function KeywordStrip({
   className?: string;
   items: string[];
   label: string;
-  tone: "matched" | "missing";
+  tone: "matched" | "weak" | "missing" | "irrelevant";
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({
@@ -69,10 +141,12 @@ function KeywordStrip({
     scrollLeft: 0,
     startX: 0
   });
-  const chipClass =
-    tone === "matched"
-      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-      : "border-red-100 bg-red-50 text-red-600";
+  const chipClass = {
+    matched: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    weak: "border-amber-100 bg-amber-50 text-amber-700",
+    missing: "border-rose-100 bg-rose-50 text-rose-700",
+    irrelevant: "border-slate-200 bg-slate-100 text-slate-500"
+  }[tone];
 
   useEffect(() => {
     const strip = stripRef.current;

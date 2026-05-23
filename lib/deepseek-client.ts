@@ -1,5 +1,9 @@
 import type { AnalyzeRequest } from "@/lib/analysis-schema";
-import { validateAnalysisReport } from "@/lib/analysis-schema";
+import {
+  validateAnalysisReport,
+  validateRequirementChecks,
+  validateRubricRatings
+} from "@/lib/analysis-schema";
 import { analysisSystemPrompt, buildAnalysisUserPrompt } from "@/lib/analysis-prompt";
 import {
   filterUnmatchedSegments,
@@ -7,7 +11,12 @@ import {
   validateSegmentOriginals,
   type SegmentOriginalIssue
 } from "@/lib/segment-original-validator";
-import type { AnalysisReport } from "@/types/analysis";
+import type {
+  AnalysisReport,
+  RequirementCheck,
+  RubricRatingLevel,
+  RubricRatings
+} from "@/types/analysis";
 
 type DeepSeekMessage = {
   role: "system" | "user";
@@ -39,6 +48,141 @@ type RewriteSource = {
   original: string;
   rewriteExample?: string;
 };
+
+type RubricDimension = keyof RubricRatings;
+
+const rubricScoreMap: Record<RubricDimension, Record<RubricRatingLevel, number>> = {
+  hardSkillMatch: { strong: 25, medium: 18, weak: 9, missing: 0 },
+  evidenceStrength: { strong: 25, medium: 18, weak: 9, missing: 0 },
+  businessContext: { strong: 20, medium: 14, weak: 7, missing: 0 },
+  quantifiedResult: { strong: 15, medium: 10, weak: 4, missing: 0 },
+  resumeClarity: { strong: 15, medium: 10, weak: 5, missing: 0 }
+};
+
+const juniorRubricScoreMap: Record<RubricDimension, Record<RubricRatingLevel, number>> = {
+  hardSkillMatch: rubricScoreMap.hardSkillMatch,
+  evidenceStrength: rubricScoreMap.evidenceStrength,
+  businessContext: { strong: 20, medium: 16, weak: 11, missing: 0 },
+  quantifiedResult: { strong: 15, medium: 12, weak: 8, missing: 0 },
+  resumeClarity: rubricScoreMap.resumeClarity
+};
+
+function isJuniorRole(jobDescription: string): boolean {
+  const jd = jobDescription.toLowerCase();
+  const seniorPatterns = /高级|manager|leader|经理/;
+
+  if (seniorPatterns.test(jd)) return false;
+
+  const juniorPatterns = /实习|助理|专员|初级/;
+
+  return juniorPatterns.test(jd);
+}
+
+function hasProjectEvidence(resumeText: string): boolean {
+  const patterns = /独立开发|项目|API|Next\.js|部署|GitHub|Vercel|产品定义/i;
+
+  return patterns.test(resumeText);
+}
+
+function computeEvidenceBonus(resumeText: string, level: RubricRatingLevel): number {
+  if (!hasProjectEvidence(resumeText)) return 0;
+  if (level === "medium") return 4;
+  if (level === "weak") return 7;
+  return 0;
+}
+
+function calculateRubricScore(rubricRatings: RubricRatings, isJunior = false): number {
+  const scoreMap = isJunior ? juniorRubricScoreMap : rubricScoreMap;
+
+  return Object.entries(scoreMap).reduce((total, [dimension, scores]) => {
+    const rating = rubricRatings[dimension as RubricDimension];
+    return total + scores[rating.level];
+  }, 0);
+}
+
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function getRequirementCheckAdjustment(check: RequirementCheck): number {
+  if (check.status === "present") {
+    if (check.priority === "must") {
+      return 2;
+    }
+
+    return check.priority === "preferred" ? 1 : 0.5;
+  }
+
+  if (check.status === "weak") {
+    if (check.priority === "must") {
+      return -5;
+    }
+
+    return check.priority === "preferred" ? -2 : -1;
+  }
+
+  if (check.priority === "must") {
+    return -6;
+  }
+
+  return check.priority === "preferred" ? -4 : -2;
+}
+
+function calculateRequirementCalibratedScore(
+  rubricRatings: RubricRatings,
+  requirementChecks: RequirementCheck[],
+  isJunior = false
+): number {
+  const rubricScore = calculateRubricScore(rubricRatings, isJunior);
+  const rawAdjustment = requirementChecks.reduce(
+    (total, check) => total + getRequirementCheckAdjustment(check),
+    0
+  );
+  const adjustment = Math.max(rawAdjustment, -18);
+  const hasMissingMust = requirementChecks.some(
+    (check) => check.priority === "must" && check.status === "missing"
+  );
+  const hasPresentMustOrPreferred = requirementChecks.some(
+    (check) =>
+      (check.priority === "must" || check.priority === "preferred") &&
+      check.status === "present" &&
+      check.evidence.trim().length > 0
+  );
+  const calibratedScore = clampScore(rubricScore + adjustment);
+
+  if (!hasMissingMust && hasPresentMustOrPreferred && rubricScore >= 60) {
+    return Math.max(calibratedScore, 68);
+  }
+
+  return calibratedScore;
+}
+
+function normalizeRequirementKeyword(label: string): string {
+  const compactLabel = label
+    .replace(/[。；;，,：:、/|()[\]{}"'“”‘’<>《》]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const firstToken = compactLabel.split(" ").find(Boolean) ?? "";
+
+  return Array.from(firstToken).slice(0, 18).join("");
+}
+
+function deriveMissingKeywordsFromRequirementChecks(
+  requirementChecks: RequirementCheck[]
+): string[] {
+  return Array.from(
+    new Set(
+      requirementChecks
+        .filter((check) => check.status === "missing" || check.status === "weak")
+        .map((check) => normalizeRequirementKeyword(check.label))
+        .filter((keyword) => keyword.length > 0)
+    )
+  ).slice(0, 8);
+}
+
+function logRubricScoreFallback(reason: string): void {
+  console.info("rubricRatings score fallback", { reason });
+}
 
 export type DeepSeekConfig = {
   apiKey: string;
@@ -155,6 +299,25 @@ function countWithoutWhitespace(value: string): number {
 
 function normalizeComparable(value: string): string {
   return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function normalizeResumeDisplayWhitespace(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/^\n+|\n+$/g, "")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function lightlyCleanResumeText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/^\n+|\n+$/g, "");
 }
 
 function uniqueMatches(value: string, pattern: RegExp): string[] {
@@ -277,18 +440,101 @@ function sanitizeRewriteExamples(payload: ModelReportObject, resumeDisplayText: 
   };
 }
 
-function withServerResumeOriginal(payload: unknown, resumeText: string): unknown {
+function withDeterministicRubricScore(payload: unknown, isJunior = false): unknown {
   if (!isModelReportObject(payload)) {
     return payload;
   }
 
-  const resumeDisplayText = isSafeResumeDisplayText(payload.resumeDisplayText, resumeText)
-    ? payload.resumeDisplayText
-    : resumeText;
+  if (payload.rubricRatings === undefined) {
+    logRubricScoreFallback("missing rubricRatings");
+    return payload;
+  }
+
+  const rubricValidation = validateRubricRatings(payload.rubricRatings);
+
+  if (!rubricValidation.ok) {
+    const payloadWithoutInvalidRubric = { ...payload };
+    delete payloadWithoutInvalidRubric.rubricRatings;
+    logRubricScoreFallback(rubricValidation.error);
+    return payloadWithoutInvalidRubric;
+  }
+
+  if (payload.requirementChecks !== undefined) {
+    const requirementChecksValidation = validateRequirementChecks(payload.requirementChecks);
+
+    if (!requirementChecksValidation.ok) {
+      const payloadWithoutInvalidRequirementChecks = { ...payload };
+      delete payloadWithoutInvalidRequirementChecks.requirementChecks;
+      logRubricScoreFallback(requirementChecksValidation.error);
+      return {
+        ...payloadWithoutInvalidRequirementChecks,
+        rubricRatings: rubricValidation.data,
+        score: calculateRubricScore(rubricValidation.data, isJunior)
+      };
+    }
+
+    return {
+      ...payload,
+      rubricRatings: rubricValidation.data,
+      requirementChecks: requirementChecksValidation.data,
+      missingKeywords: deriveMissingKeywordsFromRequirementChecks(
+        requirementChecksValidation.data
+      ),
+      score: calculateRequirementCalibratedScore(
+        rubricValidation.data,
+        requirementChecksValidation.data,
+        isJunior
+      )
+    };
+  }
+
+  return {
+    ...payload,
+    rubricRatings: rubricValidation.data,
+    score: calculateRubricScore(rubricValidation.data, isJunior)
+  };
+}
+
+function withServerResumeOriginal(payload: unknown, request: AnalyzeRequest): unknown {
+  const isJunior = isJuniorRole(request.jobDescription);
+  const scoreNormalizedPayload = withDeterministicRubricScore(payload, isJunior);
+
+  if (!isModelReportObject(scoreNormalizedPayload)) {
+    return scoreNormalizedPayload;
+  }
+
+  const evidenceBonus =
+    isJunior &&
+    scoreNormalizedPayload.rubricRatings &&
+    typeof scoreNormalizedPayload.score === "number"
+      ? computeEvidenceBonus(
+          request.resumeText,
+          (scoreNormalizedPayload.rubricRatings as RubricRatings).evidenceStrength.level
+        )
+      : 0;
+
+  const adjustedPayload =
+    evidenceBonus > 0
+      ? {
+          ...scoreNormalizedPayload,
+          score: clampScore(scoreNormalizedPayload.score as number + evidenceBonus)
+        }
+      : scoreNormalizedPayload;
+
+  const isPdfResume = request.resumeFileType === "pdf";
+  const adoptedResumeDisplayText = isSafeResumeDisplayText(
+    adjustedPayload.resumeDisplayText,
+    request.resumeText
+  )
+    ? adjustedPayload.resumeDisplayText
+    : request.resumeText;
+  const resumeDisplayText = isPdfResume
+    ? normalizeResumeDisplayWhitespace(adoptedResumeDisplayText)
+    : lightlyCleanResumeText(adoptedResumeDisplayText);
 
   return sanitizeRewriteExamples({
-    ...payload,
-    resumeOriginal: resumeText,
+    ...adjustedPayload,
+    resumeOriginal: request.resumeText,
     resumeDisplayText
   }, resumeDisplayText);
 }
@@ -337,7 +583,7 @@ async function requestDeepSeekAnalysis(
   const requestBody = {
     model: config.model,
     messages: buildMessages(request, originalIssues, jsonRepairReason),
-    max_tokens: 8192,
+    max_tokens: 16384,
     response_format: { type: "json_object" as const },
     stream: false,
     temperature: 0.2
@@ -382,7 +628,7 @@ export async function analyzeWithDeepSeek(
         jsonRepairReason
       );
       const validation = validateAnalysisReport(
-        withServerResumeOriginal(parsedPayload, request.resumeText)
+        withServerResumeOriginal(parsedPayload, request)
       );
 
       if (!validation.ok) {

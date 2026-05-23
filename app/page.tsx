@@ -114,7 +114,8 @@ export default function HomePage() {
       const response = await fetch("/api/analyze", {
         body: JSON.stringify({
           resumeText: resume.text,
-          jobDescription: jdValue
+          jobDescription: jdValue,
+          resumeFileType: resume.fileType
         }),
         headers: {
           "Content-Type": "application/json"

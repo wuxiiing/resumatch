@@ -10,6 +10,9 @@ import { createMockAnalysisReport } from "@/lib/mock-analysis";
 import type {
   AnalysisReport,
   AnnotationStatus,
+  RequirementCheck,
+  RequirementCheckPriority,
+  RequirementCheckStatus,
   ReportSegment,
   ResumeAnnotation,
   SegmentStatus
@@ -17,6 +20,16 @@ import type {
 
 const ANALYSIS_REPORT_STORAGE_KEY = "resumatch:last-analysis-report";
 const annotationStatuses = new Set<AnnotationStatus>(["keep", "improve", "remove"]);
+const requirementCheckPriorities = new Set<RequirementCheckPriority>([
+  "must",
+  "preferred",
+  "context"
+]);
+const requirementCheckStatuses = new Set<RequirementCheckStatus>([
+  "present",
+  "weak",
+  "missing"
+]);
 const segmentStatuses = new Set<SegmentStatus>(["relevant", "optimize", "irrelevant"]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -60,6 +73,19 @@ function isResumeAnnotation(value: unknown): value is ResumeAnnotation {
   );
 }
 
+function isRequirementCheck(value: unknown): value is RequirementCheck {
+  return (
+    isPlainObject(value) &&
+    typeof value.label === "string" &&
+    typeof value.priority === "string" &&
+    requirementCheckPriorities.has(value.priority as RequirementCheckPriority) &&
+    typeof value.status === "string" &&
+    requirementCheckStatuses.has(value.status as RequirementCheckStatus) &&
+    typeof value.evidence === "string" &&
+    typeof value.note === "string"
+  );
+}
+
 function isStoredAnalysisReport(value: unknown): value is AnalysisReport {
   return (
     isPlainObject(value) &&
@@ -72,6 +98,9 @@ function isStoredAnalysisReport(value: unknown): value is AnalysisReport {
     Array.isArray(value.history) &&
     Array.isArray(value.segments) &&
     value.segments.every(isReportSegment) &&
+    (value.requirementChecks === undefined ||
+      (Array.isArray(value.requirementChecks) &&
+        value.requirementChecks.every(isRequirementCheck))) &&
     (value.resumeOriginal === undefined || typeof value.resumeOriginal === "string") &&
     (value.resumeDisplayText === undefined || typeof value.resumeDisplayText === "string") &&
     (value.annotations === undefined ||
@@ -140,7 +169,7 @@ export default function ResultPage() {
       className="min-h-screen bg-white text-ink lg:flex"
       data-report-source={isSessionReport ? "session" : "mock"}
     >
-      <HistorySidebar history={report.history} />
+      <HistorySidebar currentScore={report.score} history={report.history} />
 
       <div className="min-w-0 flex-1 bg-white">
         <header className="flex flex-col gap-4 border-b border-line bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
@@ -170,6 +199,7 @@ export default function ResultPage() {
                 {hasMainContent ? (
                   <ReportViewer
                     annotations={report.annotations}
+                    requirementChecks={report.requirementChecks}
                     resumeOriginal={resumeReviewText}
                     segments={displayableSegments}
                   />

@@ -4,7 +4,14 @@ import type {
   HistoryItem,
   JobDirectionItem,
   ReportSegment,
+  RequirementCheck,
+  RequirementCheckPriority,
+  RequirementCheckStatus,
   ResumeAnnotation,
+  ResumeFileType,
+  RubricRating,
+  RubricRatingLevel,
+  RubricRatings,
   SegmentStatus,
   SuggestionSummary
 } from "@/types/analysis";
@@ -12,6 +19,7 @@ import type {
 export type AnalyzeRequest = {
   resumeText: string;
   jobDescription: string;
+  resumeFileType?: ResumeFileType;
 };
 
 type ValidationResult<T> =
@@ -27,7 +35,31 @@ type ValidationResult<T> =
 const MAX_RESUME_TEXT_LENGTH = 3000;
 const MAX_JOB_DESCRIPTION_LENGTH = 1000;
 const annotationStatuses = new Set<AnnotationStatus>(["keep", "improve", "remove"]);
+const rubricRatingLevels = new Set<RubricRatingLevel>([
+  "strong",
+  "medium",
+  "weak",
+  "missing"
+]);
+const requirementCheckPriorities = new Set<RequirementCheckPriority>([
+  "must",
+  "preferred",
+  "context"
+]);
+const requirementCheckStatuses = new Set<RequirementCheckStatus>([
+  "present",
+  "weak",
+  "missing"
+]);
 const segmentStatuses = new Set<SegmentStatus>(["relevant", "optimize", "irrelevant"]);
+const resumeFileTypes = new Set<ResumeFileType>(["docx", "xlsx", "pdf", "txt"]);
+const rubricRatingKeys = [
+  "hardSkillMatch",
+  "evidenceStrength",
+  "businessContext",
+  "quantifiedResult",
+  "resumeClarity"
+] as const;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -68,6 +100,58 @@ function isHistoryItem(value: unknown): value is HistoryItem {
     typeof value.score === "number" &&
     (value.active === undefined || typeof value.active === "boolean")
   );
+}
+
+function isRubricRating(value: unknown): value is RubricRating {
+  return (
+    isPlainObject(value) &&
+    typeof value.level === "string" &&
+    rubricRatingLevels.has(value.level as RubricRatingLevel) &&
+    typeof value.evidence === "string" &&
+    typeof value.gap === "string"
+  );
+}
+
+export function validateRubricRatings(value: unknown): ValidationResult<RubricRatings> {
+  if (!isPlainObject(value)) {
+    return { ok: false, error: "rubricRatings must be an object." };
+  }
+
+  for (const key of rubricRatingKeys) {
+    if (!isRubricRating(value[key])) {
+      return { ok: false, error: `rubricRatings.${key} is missing or invalid.` };
+    }
+  }
+
+  return { ok: true, data: value as RubricRatings };
+}
+
+function isRequirementCheck(value: unknown): value is RequirementCheck {
+  const requirementCheckKeys = ["label", "priority", "status", "evidence", "note"];
+
+  return (
+    isPlainObject(value) &&
+    Object.keys(value).every((key) => requirementCheckKeys.includes(key)) &&
+    typeof value.label === "string" &&
+    typeof value.priority === "string" &&
+    requirementCheckPriorities.has(value.priority as RequirementCheckPriority) &&
+    typeof value.status === "string" &&
+    requirementCheckStatuses.has(value.status as RequirementCheckStatus) &&
+    typeof value.evidence === "string" &&
+    typeof value.note === "string"
+  );
+}
+
+export function validateRequirementChecks(value: unknown): ValidationResult<RequirementCheck[]> {
+  if (!Array.isArray(value)) {
+    return { ok: false, error: "requirementChecks must be an array." };
+  }
+
+  if (!value.every(isRequirementCheck)) {
+    return { ok: false, error: "requirementChecks contains invalid items." };
+  }
+
+  return { ok: true, data: value };
 }
 
 function isReportSegment(value: unknown): value is ReportSegment {
@@ -142,7 +226,12 @@ export function validateAnalyzeRequest(payload: unknown): ValidationResult<Analy
     ok: true,
     data: {
       resumeText: payload.resumeText.trim(),
-      jobDescription: payload.jobDescription.trim()
+      jobDescription: payload.jobDescription.trim(),
+      resumeFileType:
+        typeof payload.resumeFileType === "string" &&
+        resumeFileTypes.has(payload.resumeFileType as ResumeFileType)
+          ? (payload.resumeFileType as ResumeFileType)
+          : undefined
     }
   };
 }
@@ -154,6 +243,22 @@ export function validateAnalysisReport(report: unknown): ValidationResult<Analys
 
   if (typeof report.score !== "number" || report.score < 0 || report.score > 100) {
     return { ok: false, error: "分析结果 score 必须是 0 到 100 的数字。" };
+  }
+
+  if (report.rubricRatings !== undefined) {
+    const rubricValidation = validateRubricRatings(report.rubricRatings);
+
+    if (!rubricValidation.ok) {
+      return { ok: false, error: rubricValidation.error };
+    }
+  }
+
+  if (report.requirementChecks !== undefined) {
+    const requirementChecksValidation = validateRequirementChecks(report.requirementChecks);
+
+    if (!requirementChecksValidation.ok) {
+      return { ok: false, error: requirementChecksValidation.error };
+    }
   }
 
   if (typeof report.summary !== "string") {
