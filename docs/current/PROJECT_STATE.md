@@ -8,7 +8,7 @@ Last updated: 2026-05-26
 - App: Next.js App Router + Tailwind CSS.
 - Current observed branch: `main...origin/main [ahead 16]`.
 - Latest known checkpoint: `f410f77 checkpoint: stabilize resume annotations pipeline`.
-- Current observed dirty tree: `lib/mock-report.ts` modified; `.agents/`, `.rescue-backups/`, and `skills-lock.json` untracked. Preserve these unless the owner explicitly opens a cleanup/checkpoint window.
+- Current observed dirty tree before `HISTORY-0001`: `lib/mock-report.ts` modified; `.agents/`, `.rescue-backups/`, and `skills-lock.json` untracked. Preserve these unless the owner explicitly opens a cleanup/checkpoint window.
 
 ## Current Product Status
 
@@ -24,6 +24,7 @@ Last updated: 2026-05-26
 - Resume annotation pipeline is checkpointed.
 - Result page has an inline resume annotation viewer.
 - Homepage analysis loading now uses a frosted form-lock overlay.
+- Result page now uses current `sessionStorage` report first, then browser-local history, then a real empty state; ordinary users no longer see mock fallback when no session report exists.
 - Owner has checked the current `/result` experience after the annotations work.
 - Owner considers the current result page close enough for MVP; do not keep polishing result-page UI before finishing the MVP loop unless a concrete blocker appears.
 
@@ -59,7 +60,7 @@ Last updated: 2026-05-26
 - Word export is not implemented.
 - IP/global daily rate limits are not implemented.
 - The homepage currently states a daily IP limit, but `/api/analyze` does not enforce it yet. This is an MVP blocker unless the copy is changed.
-- The result page still falls back to mock data when no session report exists. Decide the official MVP behavior before public review.
+- Browser-local report history is device/browser local only and intentionally does not provide login, database, or cross-device sync.
 - `TASKS.md` was historically out of date; use this file as the current control-room source after the 2026-05-26 sync.
 - Vercel env vars and production deploy checks are pending.
 
@@ -76,7 +77,7 @@ Last updated: 2026-05-26
 3. `EXPORT-0001` Word report export.
 4. `QA-0001` real sample regression across parse, analyze, result, export, and limit behavior.
 5. `DEPLOY-0001` Vercel deployment preparation.
-6. `MVP-CLEANUP-0001` production copy/mock/history cleanup before public review.
+6. `MVP-CLEANUP-0001` remaining production copy and development-entry cleanup before public review.
 7. `RM-0028` PDF parsing paragraph restoration if real samples show PDF layout quality is still blocking.
 8. `AGENT-0001` JD research agent design for a second version, not the MVP.
 

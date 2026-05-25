@@ -6,10 +6,10 @@ import { HistorySidebar } from "@/components/HistorySidebar";
 import { ReportLegend, ReportViewer } from "@/components/ReportViewer";
 import { ScoreDashboard } from "@/components/ScoreDashboard";
 import { SummarySidebar } from "@/components/SummarySidebar";
-import { createMockAnalysisReport } from "@/lib/mock-analysis";
 import type {
   AnalysisReport,
   AnnotationStatus,
+  HistoryItem,
   RequirementCheck,
   RequirementCheckPriority,
   RequirementCheckStatus,
@@ -19,6 +19,8 @@ import type {
 } from "@/types/analysis";
 
 const ANALYSIS_REPORT_STORAGE_KEY = "resumatch:last-analysis-report";
+const LOCAL_REPORT_HISTORY_STORAGE_KEY = "resumatch:local-report-history";
+const MAX_LOCAL_HISTORY_ITEMS = 5;
 const annotationStatuses = new Set<AnnotationStatus>(["keep", "improve", "remove"]);
 const requirementCheckPriorities = new Set<RequirementCheckPriority>([
   "must",
@@ -31,6 +33,17 @@ const requirementCheckStatuses = new Set<RequirementCheckStatus>([
   "missing"
 ]);
 const segmentStatuses = new Set<SegmentStatus>(["relevant", "optimize", "irrelevant"]);
+
+type ReportSource = "loading" | "session" | "history" | "empty";
+
+type LocalReportHistoryEntry = {
+  createdAt: string;
+  description: string;
+  id: string;
+  report: AnalysisReport;
+  score: number;
+  title: string;
+};
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -108,6 +121,18 @@ function isStoredAnalysisReport(value: unknown): value is AnalysisReport {
   );
 }
 
+function isLocalReportHistoryEntry(value: unknown): value is LocalReportHistoryEntry {
+  return (
+    isPlainObject(value) &&
+    typeof value.id === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.title === "string" &&
+    typeof value.description === "string" &&
+    typeof value.score === "number" &&
+    isStoredAnalysisReport(value.report)
+  );
+}
+
 function readStoredReport(): AnalysisReport | null {
   try {
     const rawReport = sessionStorage.getItem(ANALYSIS_REPORT_STORAGE_KEY);
@@ -122,6 +147,118 @@ function readStoredReport(): AnalysisReport | null {
   } catch {
     return null;
   }
+}
+
+function readLocalReportHistory(): LocalReportHistoryEntry[] {
+  try {
+    const rawHistory = localStorage.getItem(LOCAL_REPORT_HISTORY_STORAGE_KEY);
+
+    if (!rawHistory) {
+      return [];
+    }
+
+    const parsedHistory: unknown = JSON.parse(rawHistory);
+
+    if (!Array.isArray(parsedHistory)) {
+      return [];
+    }
+
+    return parsedHistory
+      .filter(isLocalReportHistoryEntry)
+      .slice(0, MAX_LOCAL_HISTORY_ITEMS);
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalReportHistory(history: LocalReportHistoryEntry[]) {
+  const nextHistory = history.slice(0, MAX_LOCAL_HISTORY_ITEMS);
+
+  if (nextHistory.length === 0) {
+    localStorage.removeItem(LOCAL_REPORT_HISTORY_STORAGE_KEY);
+    return;
+  }
+
+  localStorage.setItem(
+    LOCAL_REPORT_HISTORY_STORAGE_KEY,
+    JSON.stringify(nextHistory)
+  );
+}
+
+function sanitizeReportForHistory(report: AnalysisReport): AnalysisReport {
+  return {
+    ...report,
+    history: [],
+    resumeDisplayText: undefined,
+    resumeOriginal: undefined
+  };
+}
+
+function getHistoryTitle(report: AnalysisReport): string {
+  const firstDirection = report.jobDirection[0];
+  const firstKeyword = report.matchedKeywords[0] || report.missingKeywords[0];
+
+  return firstDirection?.label || firstKeyword || "本地分析报告";
+}
+
+function getHistoryDescription(report: AnalysisReport): string {
+  const directionSummary =
+    report.jobDirection.find((item) => item.description.trim().length > 0)
+      ?.description || report.summary;
+
+  return truncateText(directionSummary, 56);
+}
+
+function createHistoryEntry(report: AnalysisReport): LocalReportHistoryEntry {
+  const createdAt = new Date().toISOString();
+
+  return {
+    createdAt,
+    description: getHistoryDescription(report),
+    id: `local-${Date.now()}`,
+    report: sanitizeReportForHistory(report),
+    score: report.score,
+    title: getHistoryTitle(report)
+  };
+}
+
+function upsertLocalReportHistory(
+  report: AnalysisReport,
+  currentHistory: LocalReportHistoryEntry[]
+): LocalReportHistoryEntry[] {
+  const nextEntry = createHistoryEntry(report);
+  const dedupedHistory = currentHistory.filter(
+    (entry) =>
+      entry.report.score !== report.score ||
+      entry.report.summary !== report.summary
+  );
+
+  return [nextEntry, ...dedupedHistory].slice(0, MAX_LOCAL_HISTORY_ITEMS);
+}
+
+function truncateText(value: string, maxLength: number): string {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length <= maxLength) {
+    return trimmedValue;
+  }
+
+  return `${trimmedValue.slice(0, maxLength)}...`;
+}
+
+function formatHistoryTime(createdAt: string): string {
+  const createdDate = new Date(createdAt);
+
+  if (Number.isNaN(createdDate.getTime())) {
+    return "本地历史";
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit"
+  }).format(createdDate);
 }
 
 function getDisplayableSegments(report: AnalysisReport): ReportSegment[] {
@@ -146,30 +283,226 @@ function DetailEmptyState({ report }: { report: AnalysisReport }) {
   );
 }
 
+function EmptyResultState() {
+  return (
+    <section className="rounded-[14px] border border-line bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.035)]">
+      <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+        暂无报告
+      </p>
+      <h2 className="mt-2 text-lg font-semibold text-ink">
+        还没有可查看的本地分析报告
+      </h2>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+        当前页面没有读取到本次 session 报告，也没有找到浏览器本地历史记录。请回到首页重新上传简历并粘贴岗位要求发起分析。
+      </p>
+      <Link
+        className="mt-5 inline-flex w-fit items-center justify-center rounded-[12px] border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-semibold text-brand-dark hover:border-brand"
+        href="/"
+      >
+        返回首页分析
+      </Link>
+    </section>
+  );
+}
+
+function LoadingResultState() {
+  return (
+    <section className="rounded-[14px] border border-line bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.035)]">
+      <p className="text-sm font-semibold text-ink">正在读取本地报告...</p>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        正在检查本次 session 和当前浏览器的本地历史记录。
+      </p>
+    </section>
+  );
+}
+
+function LocalHistoryControls({
+  activeHistoryId,
+  history,
+  onClearHistory,
+  onDeleteHistory,
+  onSelectHistory
+}: {
+  activeHistoryId: string | null;
+  history: LocalReportHistoryEntry[];
+  onClearHistory: () => void;
+  onDeleteHistory: (id: string) => void;
+  onSelectHistory: (entry: LocalReportHistoryEntry) => void;
+}) {
+  if (history.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-[12px] border border-line bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">本地历史记录</h2>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            仅保存在当前浏览器，最多保留最近 {MAX_LOCAL_HISTORY_ITEMS} 条。
+          </p>
+        </div>
+        <button
+          className="inline-flex w-fit items-center justify-center rounded-[10px] border border-line bg-white px-3 py-2 text-xs font-semibold text-muted hover:border-red-200 hover:text-red-600"
+          onClick={onClearHistory}
+          type="button"
+        >
+          清空历史
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {history.map((entry) => {
+          const isActive = entry.id === activeHistoryId;
+
+          return (
+            <article
+              className={`rounded-[12px] border p-4 ${
+                isActive ? "border-brand bg-cyan-50/45" : "border-line bg-white"
+              }`}
+              key={entry.id}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  className="min-w-0 text-left"
+                  onClick={() => onSelectHistory(entry)}
+                  type="button"
+                >
+                  <h3 className="truncate text-sm font-semibold text-ink">
+                    {entry.title}
+                  </h3>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
+                    {entry.description}
+                  </p>
+                </button>
+                <span className="shrink-0 text-sm font-semibold text-brand-dark">
+                  {entry.score}%
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">
+                  {formatHistoryTime(entry.createdAt)}
+                </p>
+                <button
+                  className="rounded-[8px] border border-line px-2.5 py-1 text-xs font-medium text-muted hover:border-red-200 hover:text-red-600"
+                  onClick={() => onDeleteHistory(entry.id)}
+                  type="button"
+                >
+                  删除
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function ResultPage() {
-  const [report, setReport] = useState<AnalysisReport>(() => createMockAnalysisReport());
-  const [isSessionReport, setIsSessionReport] = useState(false);
+  const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
+  const [localHistory, setLocalHistory] = useState<LocalReportHistoryEntry[]>([]);
+  const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [reportSource, setReportSource] = useState<ReportSource>("loading");
 
   useEffect(() => {
     const storedReport = readStoredReport();
+    const storedHistory = readLocalReportHistory();
 
     if (storedReport) {
+      const nextHistory = upsertLocalReportHistory(storedReport, storedHistory);
+
+      writeLocalReportHistory(nextHistory);
+      setLocalHistory(nextHistory);
       setReport(storedReport);
-      setIsSessionReport(true);
+      setActiveHistoryId(nextHistory[0]?.id ?? null);
+      setReportSource("session");
+      return;
     }
+
+    setLocalHistory(storedHistory);
+
+    if (storedHistory[0]) {
+      setReport(storedHistory[0].report);
+      setActiveHistoryId(storedHistory[0].id);
+      setReportSource("history");
+      return;
+    }
+
+    setReportSource("empty");
   }, []);
 
-  const displayableSegments = getDisplayableSegments(report);
-  const resumeReviewText = report.resumeDisplayText || report.resumeOriginal;
-  const hasResumeReview = Boolean(resumeReviewText?.trim() && report.annotations?.length);
+  function handleSelectHistory(entry: LocalReportHistoryEntry) {
+    setReport(entry.report);
+    setActiveHistoryId(entry.id);
+    setReportSource("history");
+  }
+
+  function handleDeleteHistory(id: string) {
+    const nextHistory = localHistory.filter((entry) => entry.id !== id);
+
+    writeLocalReportHistory(nextHistory);
+    setLocalHistory(nextHistory);
+
+    if (id !== activeHistoryId || reportSource === "session") {
+      return;
+    }
+
+    if (nextHistory[0]) {
+      setReport(nextHistory[0].report);
+      setActiveHistoryId(nextHistory[0].id);
+      setReportSource("history");
+      return;
+    }
+
+    setReport(null);
+    setActiveHistoryId(null);
+    setReportSource("empty");
+  }
+
+  function handleClearHistory() {
+    writeLocalReportHistory([]);
+    setLocalHistory([]);
+    setActiveHistoryId(null);
+
+    if (reportSource === "history") {
+      setReport(null);
+      setReportSource("empty");
+    }
+  }
+
+  const sidebarHistory: HistoryItem[] = localHistory.map((entry) => ({
+    active: entry.id === activeHistoryId,
+    company: entry.title,
+    id: entry.id,
+    role: entry.description,
+    score: entry.score,
+    time: formatHistoryTime(entry.createdAt)
+  }));
+
+  const currentReport = report
+    ? {
+        ...report,
+        history: sidebarHistory
+      }
+    : null;
+
+  const displayableSegments = currentReport ? getDisplayableSegments(currentReport) : [];
+  const resumeReviewText = currentReport?.resumeDisplayText || currentReport?.resumeOriginal;
+  const hasResumeReview = Boolean(
+    resumeReviewText?.trim() && currentReport?.annotations?.length
+  );
   const hasMainContent = hasResumeReview || displayableSegments.length > 0;
 
   return (
     <main
       className="min-h-screen bg-white text-ink lg:flex"
-      data-report-source={isSessionReport ? "session" : "mock"}
+      data-report-source={reportSource}
     >
-      <HistorySidebar currentScore={report.score} history={report.history} />
+      <HistorySidebar
+        currentScore={currentReport?.score}
+        history={sidebarHistory}
+      />
 
       <div className="min-w-0 flex-1 bg-white">
         <header className="flex flex-col gap-4 border-b border-line bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
@@ -191,30 +524,46 @@ export default function ResultPage() {
 
         <div className="px-4 py-5 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-[1180px] space-y-4">
-            <ScoreDashboard report={report} />
-            <ReportLegend />
+            <LocalHistoryControls
+              activeHistoryId={activeHistoryId}
+              history={localHistory}
+              onClearHistory={handleClearHistory}
+              onDeleteHistory={handleDeleteHistory}
+              onSelectHistory={handleSelectHistory}
+            />
 
-            <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_318px]">
-              <div className="min-w-0 space-y-4">
-                {hasMainContent ? (
-                  <ReportViewer
-                    annotations={report.annotations}
-                    requirementChecks={report.requirementChecks}
-                    resumeOriginal={resumeReviewText}
-                    segments={displayableSegments}
-                  />
-                ) : (
-                  <DetailEmptyState report={report} />
-                )}
-                <p className="px-1 text-xs leading-5 text-slate-400">
-                  {isSessionReport
-                    ? "本报告由 AI 根据本次上传内容生成，仅供参考，建议结合自身实际情况判断。"
-                    : "本报告为示例数据，仅供参考，建议结合自身实际情况判断。"}
-                </p>
-              </div>
+            {currentReport ? (
+              <>
+                <ScoreDashboard report={currentReport} />
+                <ReportLegend />
 
-              <SummarySidebar report={report} />
-            </div>
+                <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_318px]">
+                  <div className="min-w-0 space-y-4">
+                    {hasMainContent ? (
+                      <ReportViewer
+                        annotations={currentReport.annotations}
+                        requirementChecks={currentReport.requirementChecks}
+                        resumeOriginal={resumeReviewText}
+                        segments={displayableSegments}
+                      />
+                    ) : (
+                      <DetailEmptyState report={currentReport} />
+                    )}
+                    <p className="px-1 text-xs leading-5 text-slate-400">
+                      {reportSource === "session"
+                        ? "本报告由 AI 根据本次上传内容生成，仅供参考，建议结合自身实际情况判断。"
+                        : "本报告来自当前浏览器本地历史记录，仅供参考，建议结合自身实际情况判断。"}
+                    </p>
+                  </div>
+
+                  <SummarySidebar report={currentReport} />
+                </div>
+              </>
+            ) : reportSource === "loading" ? (
+              <LoadingResultState />
+            ) : (
+              <EmptyResultState />
+            )}
           </div>
         </div>
       </div>
