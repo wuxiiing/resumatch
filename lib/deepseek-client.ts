@@ -34,9 +34,11 @@ type DeepSeekChatCompletionResponse = {
 
 type ParsedModelJson = {
   parsed: unknown;
+  parseMs: number;
 };
 
 type ModelReportObject = Record<string, unknown>;
+type TimingLogValue = string | number | boolean | null;
 type ContactInfo = {
   emails: string[];
   phones: string[];
@@ -184,6 +186,22 @@ function logRubricScoreFallback(reason: string): void {
   console.info("rubricRatings score fallback", { reason });
 }
 
+function nowMs(): number {
+  return Date.now();
+}
+
+function elapsedMs(startedAt: number): number {
+  return nowMs() - startedAt;
+}
+
+function getErrorType(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
+function logAnalysisTiming(event: string, fields: Record<string, TimingLogValue>): void {
+  console.info("[PERF-0001-C]", { event, ...fields });
+}
+
 export type DeepSeekConfig = {
   apiKey: string;
   model: string;
@@ -273,11 +291,13 @@ function getJsonCandidate(content: string): string {
 }
 
 function parseModelJson(content: string): ParsedModelJson {
+  const startedAt = nowMs();
   const jsonCandidate = getJsonCandidate(content);
 
   try {
     return {
-      parsed: JSON.parse(jsonCandidate)
+      parsed: JSON.parse(jsonCandidate),
+      parseMs: elapsedMs(startedAt)
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知 JSON 解析错误";
@@ -541,16 +561,20 @@ function withServerResumeOriginal(payload: unknown, request: AnalyzeRequest): un
 
 function parseDeepSeekContent(
   responseBody: DeepSeekChatCompletionResponse
-): unknown {
+): ParsedModelJson {
   const choice = responseBody.choices?.[0];
   const finishReason = choice?.finish_reason;
   const content = choice?.message?.content;
 
   if (finishReason === "length") {
     throw new DeepSeekClientError(
-      "DeepSeek 输出被截断，请提高 max_tokens 或缩短输入内容。",
+      "DeepSeek 输出被截断，未返回完整 JSON 报告（finish_reason: length）。请缩短输入内容后重试，或提高 max_tokens。",
       500
     );
+  }
+
+  if (!choice) {
+    throw new DeepSeekClientError("DeepSeek 响应缺少 choices[0]。", 502);
   }
 
   if (
@@ -570,7 +594,21 @@ function parseDeepSeekContent(
     throw new Error("DeepSeek 返回内容为空。");
   }
 
-  return parseModelJson(content).parsed;
+  return parseModelJson(content);
+}
+
+async function readDeepSeekResponseBody(
+  response: Response
+): Promise<DeepSeekChatCompletionResponse> {
+  try {
+    return (await response.json()) as DeepSeekChatCompletionResponse;
+  } catch (error) {
+    logAnalysisTiming("upstream-body-json", {
+      status: "error",
+      errorType: getErrorType(error)
+    });
+    throw new DeepSeekClientError("DeepSeek 上游返回的响应体不是合法 JSON。", 502);
+  }
 }
 
 async function requestDeepSeekAnalysis(
@@ -578,7 +616,8 @@ async function requestDeepSeekAnalysis(
   config: DeepSeekConfig,
   fetcher: DeepSeekFetch,
   originalIssues: SegmentOriginalIssue[],
-  jsonRepairReason: string | null
+  jsonRepairReason: string | null,
+  attempt: number
 ): Promise<unknown> {
   const requestBody = {
     model: config.model,
@@ -588,6 +627,8 @@ async function requestDeepSeekAnalysis(
     stream: false,
     temperature: 0.2
   };
+  const body = JSON.stringify(requestBody);
+  const requestStartedAt = nowMs();
 
   const response = await fetcher(`${config.baseUrl}/chat/completions`, {
     method: "POST",
@@ -595,14 +636,55 @@ async function requestDeepSeekAnalysis(
       Authorization: `Bearer ${config.apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(requestBody)
+    body
+  });
+  const deepSeekRequestMs = elapsedMs(requestStartedAt);
+
+  logAnalysisTiming("deepseek-request", {
+    status: response.ok ? "ok" : "error",
+    attempt,
+    ms: deepSeekRequestMs,
+    httpStatus: typeof response.status === "number" ? response.status : null,
+    requestBodyLength: body.length
   });
 
   if (!response.ok) {
     throw new DeepSeekClientError("AI 分析服务暂时不可用，请稍后再试。", 502);
   }
 
-  return parseDeepSeekContent((await response.json()) as DeepSeekChatCompletionResponse);
+  const responseBodyStartedAt = nowMs();
+  const responseBody = await readDeepSeekResponseBody(response);
+  const responseBodyMs = elapsedMs(responseBodyStartedAt);
+  const contentDiagnostics = getContentDiagnostics(responseBody.choices?.[0]?.message?.content);
+  let parsed: ParsedModelJson;
+
+  try {
+    parsed = parseDeepSeekContent(responseBody);
+  } catch (error) {
+    logAnalysisTiming("deepseek-parse", {
+      status: "error",
+      attempt,
+      bodyJsonMs: responseBodyMs,
+      contentJsonMs: 0,
+      choicesLength: responseBody.choices?.length ?? 0,
+      contentLength: contentDiagnostics.contentLength,
+      finishReason: responseBody.choices?.[0]?.finish_reason ?? null,
+      errorType: getErrorType(error)
+    });
+    throw error;
+  }
+
+  logAnalysisTiming("deepseek-parse", {
+    status: "ok",
+    attempt,
+    bodyJsonMs: responseBodyMs,
+    contentJsonMs: parsed.parseMs,
+    choicesLength: responseBody.choices?.length ?? 0,
+    contentLength: contentDiagnostics.contentLength,
+    finishReason: responseBody.choices?.[0]?.finish_reason ?? null
+  });
+
+  return parsed.parsed;
 }
 
 export async function analyzeWithDeepSeek(
@@ -614,22 +696,35 @@ export async function analyzeWithDeepSeek(
 ): Promise<AnalysisReport> {
   const config = getDeepSeekConfig(options.env ?? process.env);
   const fetcher = options.fetcher ?? fetch;
+  const analysisStartedAt = nowMs();
   let lastValidationError = "DeepSeek 返回结果不是有效的分析 JSON。";
-  let originalIssues: SegmentOriginalIssue[] = [];
+  const originalIssues: SegmentOriginalIssue[] = [];
   let jsonRepairReason: string | null = null;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const attemptNumber = attempt + 1;
+    const attemptStartedAt = nowMs();
     try {
       const parsedPayload = await requestDeepSeekAnalysis(
         request,
         config,
         fetcher,
         originalIssues,
-        jsonRepairReason
+        jsonRepairReason,
+        attemptNumber
       );
+      const schemaStartedAt = nowMs();
       const validation = validateAnalysisReport(
         withServerResumeOriginal(parsedPayload, request)
       );
+      const schemaValidateMs = elapsedMs(schemaStartedAt);
+
+      logAnalysisTiming("schema-validate", {
+        status: validation.ok ? "ok" : "error",
+        attempt: attemptNumber,
+        ms: schemaValidateMs,
+        errorType: validation.ok ? null : "AnalysisReportValidationError"
+      });
 
       if (!validation.ok) {
         lastValidationError = validation.error;
@@ -639,43 +734,87 @@ export async function analyzeWithDeepSeek(
 
       const reviewText =
         validation.data.resumeDisplayText || validation.data.resumeOriginal || request.resumeText;
+      const locateStartedAt = nowMs();
       const originalValidation = validateSegmentOriginals(validation.data, reviewText);
 
       const annotationValidation = locateResumeAnnotations(
         validation.data,
         reviewText
       );
+      const locateMs = elapsedMs(locateStartedAt);
+
+      logAnalysisTiming("annotation-segment-locate", {
+        status: originalValidation.ok && annotationValidation.ok ? "ok" : "error",
+        attempt: attemptNumber,
+        ms: locateMs,
+        reviewTextLength: reviewText.length,
+        segmentIssueCount: originalValidation.ok ? 0 : originalValidation.issues.length,
+        annotationIssueCount: annotationValidation.ok ? 0 : annotationValidation.issues.length
+      });
 
       if (originalValidation.ok && annotationValidation.ok) {
+        logAnalysisTiming("analyze-total", {
+          status: "ok",
+          attempt: attemptNumber,
+          ms: elapsedMs(analysisStartedAt)
+        });
         return annotationValidation.report;
       }
 
-      if (!originalValidation.ok) {
-        lastValidationError = "存在未命中简历原文的 segments.original。";
-        originalIssues = originalValidation.issues;
-        jsonRepairReason = null;
-      } else {
-        lastValidationError = "存在未命中简历原文的 annotations.original。";
-        originalIssues = [];
-        jsonRepairReason = lastValidationError;
+      const reportWithMatchedSegments = originalValidation.ok
+        ? validation.data
+        : filterUnmatchedSegments(validation.data, reviewText);
+      const fallbackLocateStartedAt = nowMs();
+      const filteredReport = locateResumeAnnotations(
+        reportWithMatchedSegments,
+        reviewText
+      ).report;
+      const fallbackLocateMs = elapsedMs(fallbackLocateStartedAt);
+
+      logAnalysisTiming("annotation-segment-locate", {
+        status: "filtered",
+        attempt: attemptNumber,
+        ms: fallbackLocateMs,
+        reviewTextLength: reviewText.length,
+        segmentIssueCount: originalValidation.ok ? 0 : originalValidation.issues.length,
+        annotationIssueCount: 0
+      });
+      const fallbackSchemaStartedAt = nowMs();
+      const filteredValidation = validateAnalysisReport(filteredReport);
+      const fallbackSchemaValidateMs = elapsedMs(fallbackSchemaStartedAt);
+
+      logAnalysisTiming("schema-validate", {
+        status: filteredValidation.ok ? "ok" : "error",
+        attempt: attemptNumber,
+        ms: fallbackSchemaValidateMs,
+        errorType: filteredValidation.ok ? null : "AnalysisReportValidationError"
+      });
+
+      if (filteredValidation.ok) {
+        logAnalysisTiming("analyze-total", {
+          status: "ok",
+          attempt: attemptNumber,
+          ms: elapsedMs(analysisStartedAt)
+        });
+        return filteredValidation.data;
       }
 
-      if (attempt === 1) {
-        const reportWithMatchedSegments = originalValidation.ok
-          ? validation.data
-          : filterUnmatchedSegments(validation.data, reviewText);
-        const filteredReport = locateResumeAnnotations(
-          reportWithMatchedSegments,
-          reviewText
-        ).report;
-        const filteredValidation = validateAnalysisReport(filteredReport);
-
-        if (filteredValidation.ok) {
-          return filteredValidation.data;
-        }
-      }
+      lastValidationError = "定位失败后的本地过滤报告结构校验失败。";
     } catch (error) {
+      logAnalysisTiming("attempt-total", {
+        status: "error",
+        attempt: attemptNumber,
+        ms: elapsedMs(attemptStartedAt),
+        errorType: getErrorType(error)
+      });
+
       if (error instanceof DeepSeekClientError) {
+        logAnalysisTiming("analyze-total", {
+          status: "error",
+          attempt: attemptNumber,
+          ms: elapsedMs(analysisStartedAt),
+          errorType: getErrorType(error)
+        });
         throw error;
       }
 
@@ -686,5 +825,11 @@ export async function analyzeWithDeepSeek(
     }
   }
 
+  logAnalysisTiming("analyze-total", {
+    status: "error",
+    attempt: 2,
+    ms: elapsedMs(analysisStartedAt),
+    errorType: "AnalysisReportValidationError"
+  });
   throw new DeepSeekClientError(`AI 分析结果结构校验失败：${lastValidationError}`, 500);
 }
