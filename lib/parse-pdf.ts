@@ -1,6 +1,3 @@
-import path from "path";
-import { pathToFileURL } from "url";
-
 export type ParsedPdfResume = {
   text: string;
   charCount: number;
@@ -18,6 +15,13 @@ type PositionedTextItem = {
   str: string;
   x: number;
   y: number;
+};
+
+type PdfDocumentOptions = {
+  data: Uint8Array;
+  disableFontFace: boolean;
+  disableWorker: boolean;
+  useWorkerFetch: boolean;
 };
 
 function cleanExtractedText(rawText: string): string {
@@ -88,17 +92,16 @@ function rebuildPageText(items: PdfTextItem[]): string {
 }
 
 export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
-  const { getDocument, GlobalWorkerOptions } = await import(
+  const { getDocument } = await import(
     "pdfjs-dist/legacy/build/pdf.mjs"
   );
-  GlobalWorkerOptions.workerSrc = pathToFileURL(
-    path.join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
-  ).href;
-  const loadingTask = getDocument({
+  const documentOptions: PdfDocumentOptions = {
     data: new Uint8Array(buffer),
     disableFontFace: true,
+    disableWorker: true,
     useWorkerFetch: false
-  });
+  };
+  const loadingTask = getDocument(documentOptions);
   const pdf = await loadingTask.promise;
   const pageTexts: string[] = [];
 
