@@ -40,6 +40,8 @@ function getUserErrorMessage(error: unknown): string | null {
 }
 
 export async function POST(request: Request) {
+  let fileType: SupportedResumeFileType | null = null;
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const fileType = getSupportedFileType(file);
+    fileType = getSupportedFileType(file);
 
     if (!fileType) {
       return NextResponse.json(
@@ -83,9 +85,21 @@ export async function POST(request: Request) {
   } catch (error) {
     const userErrorMessage = getUserErrorMessage(error);
 
+    console.error("[PARSE_RESUME_ERROR]", {
+      fileType,
+      message: error instanceof Error ? error.message : "Unknown parse error",
+      name: error instanceof Error ? error.name : "UnknownError"
+    });
+
     return NextResponse.json(
-      { error: userErrorMessage ?? "解析简历文件失败，请确认文件未损坏后重试。" },
-      { status: 400 }
+      {
+        error:
+          userErrorMessage ??
+          (fileType === "pdf"
+            ? "服务器 PDF 解析配置异常，请稍后重试。"
+            : "解析简历文件失败，请确认文件未损坏后重试。")
+      },
+      { status: userErrorMessage ? 400 : 500 }
     );
   }
 }
