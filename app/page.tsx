@@ -17,6 +17,29 @@ type AnalyzeError = {
   error?: string;
 };
 
+async function readAnalyzeResult(
+  response: Response
+): Promise<AnalysisReport | AnalyzeError> {
+  try {
+    return (await response.json()) as AnalysisReport | AnalyzeError;
+  } catch {
+    return {
+      error: `分析服务响应异常（HTTP ${response.status}），请稍后重试。`
+    };
+  }
+}
+
+function getAnalyzeErrorMessage(
+  result: AnalysisReport | AnalyzeError,
+  status: number
+): string {
+  if ("error" in result && result.error) {
+    return result.error;
+  }
+
+  return `分析失败（HTTP ${status}），请稍后重试。`;
+}
+
 function AnalysisLockOverlay({
   elapsedSeconds,
   isComplete
@@ -122,14 +145,10 @@ export default function HomePage() {
         },
         method: "POST"
       });
-      const result = (await response.json()) as AnalysisReport | AnalyzeError;
+      const result = await readAnalyzeResult(response);
 
-      if (!response.ok) {
-        setAnalyzeError(
-          "error" in result && result.error
-            ? result.error
-            : "分析失败，请稍后再试。"
-        );
+      if (!response.ok || ("error" in result && result.error)) {
+        setAnalyzeError(getAnalyzeErrorMessage(result, response.status));
         setIsAnalyzing(false);
         return;
       }
@@ -142,7 +161,7 @@ export default function HomePage() {
       });
       router.push("/result");
     } catch {
-      setAnalyzeError("分析服务暂时不可用，请检查网络后重试。");
+      setAnalyzeError("分析请求无法发出，请检查网络后重试。");
       setIsAnalyzing(false);
       setIsAnalysisComplete(false);
     }
