@@ -8,7 +8,16 @@ export type ParsedPdfResume = {
 };
 
 type PdfTextItem = {
+  height?: number;
   str?: string;
+  transform?: number[];
+  width?: number;
+};
+
+type PositionedTextItem = {
+  str: string;
+  x: number;
+  y: number;
 };
 
 function cleanExtractedText(rawText: string): string {
@@ -23,6 +32,59 @@ function cleanExtractedText(rawText: string): string {
 
 function getUserError(message: string): Error {
   return new Error(`USER_ERROR:${message}`);
+}
+
+function getPositionedTextItem(item: PdfTextItem): PositionedTextItem | null {
+  const str = item.str?.trim();
+  const transform = item.transform;
+
+  if (!str || !transform || transform.length < 6) {
+    return null;
+  }
+
+  return {
+    str,
+    x: transform[4] ?? 0,
+    y: transform[5] ?? 0
+  };
+}
+
+function rebuildPageText(items: PdfTextItem[]): string {
+  const positionedItems = items
+    .map(getPositionedTextItem)
+    .filter((item): item is PositionedTextItem => item !== null)
+    .sort((a, b) => {
+      const yDistance = Math.abs(b.y - a.y);
+
+      if (yDistance > 3) {
+        return b.y - a.y;
+      }
+
+      return a.x - b.x;
+    });
+
+  const lines: PositionedTextItem[][] = [];
+
+  for (const item of positionedItems) {
+    const currentLine = lines[lines.length - 1];
+    const currentY = currentLine?.[0]?.y;
+
+    if (!currentLine || currentY === undefined || Math.abs(currentY - item.y) > 3) {
+      lines.push([item]);
+      continue;
+    }
+
+    currentLine.push(item);
+  }
+
+  return lines
+    .map((line) =>
+      line
+        .sort((a, b) => a.x - b.x)
+        .map((item) => item.str)
+        .join(" ")
+    )
+    .join("\n");
 }
 
 export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
@@ -43,11 +105,7 @@ export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item) => (item as PdfTextItem).str ?? "")
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .join(" ");
+    const pageText = rebuildPageText(textContent.items as PdfTextItem[]);
 
     page.cleanup();
 

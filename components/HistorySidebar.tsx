@@ -7,9 +7,18 @@ import type { HistoryItem } from "@/types/analysis";
 type HistorySidebarProps = {
   currentScore?: number;
   history: HistoryItem[];
+  onClearHistory: () => void;
+  onDeleteHistory: (id: string) => void;
+  onSelectHistory: (id: string) => void;
 };
 
-export function HistorySidebar({ currentScore, history }: HistorySidebarProps) {
+export function HistorySidebar({
+  currentScore,
+  history,
+  onClearHistory,
+  onDeleteHistory,
+  onSelectHistory
+}: HistorySidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -24,7 +33,7 @@ export function HistorySidebar({ currentScore, history }: HistorySidebarProps) {
         </div>
         <button
           aria-label={isCollapsed ? "展开历史记录" : "收起历史记录"}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-white text-slate-500 hover:border-cyan-200 hover:text-brand-dark"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-transparent text-slate-500 hover:bg-white hover:text-brand-dark"
           onClick={() => setIsCollapsed((current) => !current)}
           type="button"
         >
@@ -45,6 +54,15 @@ export function HistorySidebar({ currentScore, history }: HistorySidebarProps) {
       </label>
 
       <div className={isCollapsed ? "mt-5 hidden lg:hidden" : "mt-5 space-y-3"}>
+        {history.length === 0 ? (
+          <div className="rounded-[12px] border border-dashed border-line bg-white/70 p-4">
+            <p className="text-sm font-semibold text-ink">暂无历史记录</p>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              分析完成后，报告会保存在当前浏览器。历史仅保存在当前浏览器，本地数据清理后不可恢复。
+            </p>
+          </div>
+        ) : null}
+
         {history.map((item) => {
           const displayScore =
             item.active && typeof currentScore === "number"
@@ -59,30 +77,49 @@ export function HistorySidebar({ currentScore, history }: HistorySidebarProps) {
               key={item.id}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <button
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => onSelectHistory(item.id)}
+                  type="button"
+                >
                   <h2 className="truncate text-sm font-semibold text-ink">
                     {item.company}
                   </h2>
                   <p className="mt-1 truncate text-xs text-muted">{item.role}</p>
-                </div>
+                </button>
                 <span className={`shrink-0 text-sm font-semibold ${scoreColor(displayScore)}`}>
                   {displayScore}%
                 </span>
               </div>
-              <p className="mt-3 text-xs text-slate-400">{item.time}</p>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">{item.time}</p>
+                <button
+                  className="rounded-[8px] px-2 py-1 text-xs font-medium text-muted hover:bg-red-50 hover:text-red-600"
+                  onClick={() => onDeleteHistory(item.id)}
+                  type="button"
+                >
+                  删除
+                </button>
+              </div>
             </article>
           );
         })}
       </div>
 
-      <button
-        className="mt-5 w-full rounded-[12px] border border-line bg-white px-4 py-2 text-sm font-medium text-muted"
-        disabled
-        type="button"
-        hidden={isCollapsed}
-      >
-        清空历史记录（占位）
-      </button>
+      {history.length > 0 ? (
+        <div hidden={isCollapsed}>
+          <p className="mt-5 text-xs leading-5 text-muted">
+            历史仅保存在当前浏览器，本地数据清理后不可恢复。
+          </p>
+          <button
+            className="mt-3 w-full rounded-[12px] border border-line bg-white px-4 py-2 text-sm font-medium text-muted hover:border-red-200 hover:text-red-600"
+            onClick={onClearHistory}
+            type="button"
+          >
+            清空历史记录
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 }

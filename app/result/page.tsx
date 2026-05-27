@@ -5,7 +5,12 @@ import { useEffect, useState } from "react";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { ReportLegend, ReportViewer } from "@/components/ReportViewer";
 import { ScoreDashboard } from "@/components/ScoreDashboard";
-import { SummarySidebar } from "@/components/SummarySidebar";
+import {
+  ExportReportSection,
+  JobDirectionSection,
+  KeywordAnalysisSection,
+  SummarySidebar
+} from "@/components/SummarySidebar";
 import type {
   AnalysisReport,
   AnnotationStatus,
@@ -188,9 +193,7 @@ function writeLocalReportHistory(history: LocalReportHistoryEntry[]) {
 function sanitizeReportForHistory(report: AnalysisReport): AnalysisReport {
   return {
     ...report,
-    history: [],
-    resumeDisplayText: undefined,
-    resumeOriginal: undefined
+    history: []
   };
 }
 
@@ -295,6 +298,9 @@ function EmptyResultState() {
       <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
         当前页面没有读取到本次 session 报告，也没有找到浏览器本地历史记录。请回到首页重新上传简历并粘贴岗位要求发起分析。
       </p>
+      <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
+        历史仅保存在当前浏览器，本地数据清理后不可恢复。
+      </p>
       <Link
         className="mt-5 inline-flex w-fit items-center justify-center rounded-[12px] border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-semibold text-brand-dark hover:border-brand"
         href="/"
@@ -312,89 +318,6 @@ function LoadingResultState() {
       <p className="mt-2 text-sm leading-6 text-muted">
         正在检查本次 session 和当前浏览器的本地历史记录。
       </p>
-    </section>
-  );
-}
-
-function LocalHistoryControls({
-  activeHistoryId,
-  history,
-  onClearHistory,
-  onDeleteHistory,
-  onSelectHistory
-}: {
-  activeHistoryId: string | null;
-  history: LocalReportHistoryEntry[];
-  onClearHistory: () => void;
-  onDeleteHistory: (id: string) => void;
-  onSelectHistory: (entry: LocalReportHistoryEntry) => void;
-}) {
-  if (history.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="rounded-[12px] border border-line bg-white p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">本地历史记录</h2>
-          <p className="mt-1 text-xs leading-5 text-muted">
-            仅保存在当前浏览器，最多保留最近 {MAX_LOCAL_HISTORY_ITEMS} 条。
-          </p>
-        </div>
-        <button
-          className="inline-flex w-fit items-center justify-center rounded-[10px] border border-line bg-white px-3 py-2 text-xs font-semibold text-muted hover:border-red-200 hover:text-red-600"
-          onClick={onClearHistory}
-          type="button"
-        >
-          清空历史
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {history.map((entry) => {
-          const isActive = entry.id === activeHistoryId;
-
-          return (
-            <article
-              className={`rounded-[12px] border p-4 ${
-                isActive ? "border-brand bg-cyan-50/45" : "border-line bg-white"
-              }`}
-              key={entry.id}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <button
-                  className="min-w-0 text-left"
-                  onClick={() => onSelectHistory(entry)}
-                  type="button"
-                >
-                  <h3 className="truncate text-sm font-semibold text-ink">
-                    {entry.title}
-                  </h3>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
-                    {entry.description}
-                  </p>
-                </button>
-                <span className="shrink-0 text-sm font-semibold text-brand-dark">
-                  {entry.score}%
-                </span>
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="text-xs text-slate-400">
-                  {formatHistoryTime(entry.createdAt)}
-                </p>
-                <button
-                  className="rounded-[8px] border border-line px-2.5 py-1 text-xs font-medium text-muted hover:border-red-200 hover:text-red-600"
-                  onClick={() => onDeleteHistory(entry.id)}
-                  type="button"
-                >
-                  删除
-                </button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
     </section>
   );
 }
@@ -436,6 +359,14 @@ export default function ResultPage() {
     setReport(entry.report);
     setActiveHistoryId(entry.id);
     setReportSource("history");
+  }
+
+  function handleSelectHistoryById(id: string) {
+    const entry = localHistory.find((historyEntry) => historyEntry.id === id);
+
+    if (entry) {
+      handleSelectHistory(entry);
+    }
   }
 
   function handleDeleteHistory(id: string) {
@@ -502,6 +433,9 @@ export default function ResultPage() {
       <HistorySidebar
         currentScore={currentReport?.score}
         history={sidebarHistory}
+        onClearHistory={handleClearHistory}
+        onDeleteHistory={handleDeleteHistory}
+        onSelectHistory={handleSelectHistoryById}
       />
 
       <div className="min-w-0 flex-1 bg-white">
@@ -524,14 +458,6 @@ export default function ResultPage() {
 
         <div className="px-4 py-5 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-[1180px] space-y-4">
-            <LocalHistoryControls
-              activeHistoryId={activeHistoryId}
-              history={localHistory}
-              onClearHistory={handleClearHistory}
-              onDeleteHistory={handleDeleteHistory}
-              onSelectHistory={handleSelectHistory}
-            />
-
             {currentReport ? (
               <>
                 <ScoreDashboard report={currentReport} />
@@ -539,6 +465,10 @@ export default function ResultPage() {
 
                 <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_318px]">
                   <div className="min-w-0 space-y-4">
+                    <div className="space-y-4 xl:hidden">
+                      <JobDirectionSection report={currentReport} />
+                      <KeywordAnalysisSection report={currentReport} />
+                    </div>
                     {hasMainContent ? (
                       <ReportViewer
                         annotations={currentReport.annotations}
@@ -549,14 +479,17 @@ export default function ResultPage() {
                     ) : (
                       <DetailEmptyState report={currentReport} />
                     )}
+                    <div className="xl:hidden">
+                      <ExportReportSection report={currentReport} />
+                    </div>
                     <p className="px-1 text-xs leading-5 text-slate-400">
                       {reportSource === "session"
                         ? "本报告由 AI 根据本次上传内容生成，仅供参考，建议结合自身实际情况判断。"
-                        : "本报告来自当前浏览器本地历史记录，仅供参考，建议结合自身实际情况判断。"}
+                        : "本报告来自当前浏览器本地历史记录；历史仅保存在当前浏览器，本地数据清理后不可恢复。报告仅供参考，建议结合自身实际情况判断。"}
                     </p>
                   </div>
 
-                  <SummarySidebar report={currentReport} />
+                  <SummarySidebar className="hidden xl:block" report={currentReport} />
                 </div>
               </>
             ) : reportSource === "loading" ? (

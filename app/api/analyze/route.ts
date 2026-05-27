@@ -5,6 +5,10 @@ import {
   validateAnalyzeRequest
 } from "@/lib/analysis-schema";
 import { analyzeWithDeepSeek, DeepSeekClientError } from "@/lib/deepseek-client";
+import {
+  consumeAnalyzeRateLimit,
+  getAnalyzeRateLimitClientIp
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -21,6 +25,13 @@ export async function POST(request: Request) {
 
   if (!requestValidation.ok) {
     return NextResponse.json({ error: requestValidation.error }, { status: 400 });
+  }
+
+  const clientIp = getAnalyzeRateLimitClientIp(request.headers);
+  const rateLimit = consumeAnalyzeRateLimit(clientIp);
+
+  if (!rateLimit.ok) {
+    return NextResponse.json({ error: rateLimit.error }, { status: rateLimit.status });
   }
 
   try {

@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import styles from "./OpeningAnimation.module.css";
 
 const ANIMATION_DURATION = 3600;
+const OPENING_ANIMATION_PLAYED_KEY = "resumatch:opening-animation-played";
 
 type OpeningAnimationProps = {
   children: ReactNode;
@@ -12,8 +13,10 @@ type OpeningAnimationProps = {
 
 export function OpeningAnimation({ children }: OpeningAnimationProps) {
   const [playId, setPlayId] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [contentVisible, setContentVisible] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(() => shouldPlayOpeningAnimation());
+  const [contentVisible, setContentVisible] = useState(
+    () => !shouldPlayOpeningAnimation()
+  );
   const [reducedMotion, setReducedMotion] = useState(false);
   const [logoPosition, setLogoPosition] = useState({ x: 0, y: 0 });
 
@@ -50,6 +53,7 @@ export function OpeningAnimation({ children }: OpeningAnimationProps) {
       setReducedMotion(shouldReduce);
 
       if (shouldReduce) {
+        markOpeningAnimationPlayed();
         setIsPlaying(false);
         setContentVisible(true);
       }
@@ -68,6 +72,14 @@ export function OpeningAnimation({ children }: OpeningAnimationProps) {
       return;
     }
 
+    const shouldPlay = playId > 0 || shouldPlayOpeningAnimation();
+
+    if (!shouldPlay) {
+      setIsPlaying(false);
+      setContentVisible(true);
+      return;
+    }
+
     setIsPlaying(true);
     setContentVisible(false);
 
@@ -75,6 +87,7 @@ export function OpeningAnimation({ children }: OpeningAnimationProps) {
       setContentVisible(true);
     }, 3060);
     const doneTimer = window.setTimeout(() => {
+      markOpeningAnimationPlayed();
       setIsPlaying(false);
     }, ANIMATION_DURATION);
 
@@ -135,4 +148,16 @@ export function OpeningAnimation({ children }: OpeningAnimationProps) {
       </button>
     </div>
   );
+}
+
+function shouldPlayOpeningAnimation(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return sessionStorage.getItem(OPENING_ANIMATION_PLAYED_KEY) !== "true";
+}
+
+function markOpeningAnimationPlayed() {
+  sessionStorage.setItem(OPENING_ANIMATION_PLAYED_KEY, "true");
 }

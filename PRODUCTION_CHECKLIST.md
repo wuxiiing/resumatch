@@ -56,15 +56,18 @@
 
 - [ ] `npm run lint` 通过。
 - [ ] `npm run build` 通过。
+- [ ] Vercel 项目 Node 版本使用 `package.json` 的 `engines.node = "24.x"`；Vercel 文档说明 `engines.node` 会覆盖项目设置，满足 `pdfjs-dist@5.7.284` 的 `>=22.13.0 || >=24` 要求。
+- [ ] Vercel Build Command 使用默认 `npm run build`，Install Command 使用默认 npm 安装；当前 `next.config.ts` 不需要额外部署配置。
 - [ ] 本地 dev server 可访问 `/` 和 `/result`。
 - [ ] 生产预览或 Vercel 预览可访问 `/` 和 `/result`。
+- [ ] Vercel 预览环境和生产环境都已配置服务端环境变量，且不在代码、日志、聊天或提交中出现真实值。
 - [ ] 如果 `next start` 出现本地产物错误，必须单独复查，不能直接忽略。
 - [ ] 不提交 `.env.local` 或真实 API Key。
 - [ ] secret/token/API key 扫描无真实密钥。
 - [ ] 依赖文件变更必须有明确原因和验收记录。
 - [ ] `xlsx@0.18.5` 当前带来 npm audit 警告，需要在正式版前评估是否接受、替换库、加隔离措施，或等待安全修复；不要未经确认直接 `npm audit fix`。
 - [ ] `next` 依赖链中存在 `postcss` moderate audit 警告；当前不要执行 `npm audit fix --force`，因为它可能降级或破坏 Next 版本，需等正式版前结合 Next 升级策略统一处理。
-- [ ] `pdfjs-dist@5.7.284` 要求 Node `>=22.13.0 || >=24`；正式部署前必须确认 Vercel Node 版本与 PDF worker 路径可用，否则文字型 PDF 解析可能只在本地可用。
+- [ ] `pdfjs-dist@5.7.284` 要求 Node `>=22.13.0 || >=24`；当前方案用 Vercel Node `24.x` 满足 Node 要求，预览部署后仍需用文字型 PDF 烟测确认 PDF worker 路径可用。
 - [ ] Git 工作区在 checkpoint 前应干净或变更范围清楚。
 
 ## 后端和业务链路上线检查
@@ -80,15 +83,28 @@
 - [ ] JSON 解析失败时重试一次，仍失败时返回清楚错误。
 - [ ] 报告页渲染必须基于结构化结果，不依赖纯文本拼接。
 - [ ] Word 导出为干净文本和建议附录，不加入颜色标注。
-- [ ] IP 限流方案需要确认：内存 MVP 还是 Vercel KV。
+- [ ] IP 限流方案需要确认：MVP 使用内存方案可上线小流量预览；生产多实例或重启场景必须接受“重启清空、多实例不共享”的风险，或改为 Vercel KV 后再扩大流量。
 
 ## 部署前待确认
 
-- [ ] 本地 `.env.local` 是否已由项目负责人自行配置真实 `DEEPSEEK_API_KEY`、百度 OCR 相关 Key；不得提交该文件，不在聊天中粘贴真实 Key。
+- [ ] 本地 `.env.local` 是否已由项目负责人自行配置真实 `DEEPSEEK_API_KEY`；不得提交该文件，不在聊天中粘贴真实 Key。
 - [ ] Vercel Environment Variables 是否已由项目负责人自行配置完成；施工窗口只读取环境变量，不接触真实 Key。
+- [ ] 必填生产环境变量：`DEEPSEEK_API_KEY`。
+- [ ] 可选生产环境变量：`DEEPSEEK_MODEL`，未配置时使用代码默认模型。
+- [ ] 可选生产环境变量：`DEEPSEEK_API_BASE_URL`，未配置时使用代码默认 DeepSeek API 地址。
+- [ ] 百度 OCR 相关环境变量当前不阻塞 MVP，因为扫描件/图片型 PDF OCR 不在第一版。
+- [ ] API runtime 确认：`/api/analyze`、`/api/parse-resume`、`/api/export-word` 都必须保持 `export const runtime = "nodejs"`。
 - [ ] 每 IP 每日 5 次、全站每日 500 次的限制是否已生效。
 - [ ] 部署后用真实中文简历和真实岗位描述做完整验收。
 - [ ] 正式访问地址是否需要写入 README 或项目负责人交接文档。
+
+## Vercel 部署步骤
+
+1. 本地检查：确认工作区变更范围清楚，执行 `npm run lint`、`npm run build`，确认 `pdfjs-dist` Node 要求和三个 API runtime。
+2. Vercel 环境变量：在 Preview 和 Production 配置 `DEEPSEEK_API_KEY`，按需配置 `DEEPSEEK_MODEL`、`DEEPSEEK_API_BASE_URL`，不粘贴真实值到仓库或聊天。
+3. Preview deploy：通过 Git integration 或 `vercel deploy` 生成预览地址，确认构建使用 Node `24.x`。
+4. Smoke test：访问 `/` 和 `/result`；用脱敏真实样例验证上传、解析、分析、报告、Word 导出；用文字型 PDF 验证 PDF 解析；确认超过次数时 `/api/analyze` 返回限流错误。
+5. Production deploy：预览验收后再发布生产；发布后重复最小 smoke test，并观察 Vercel Functions 日志中是否存在构建、runtime、DeepSeek 或 PDF 解析错误。
 
 ## 以后再考虑，不影响第一版
 

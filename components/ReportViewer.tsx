@@ -364,7 +364,7 @@ function AnnotatedResumeView({
         <div className="border-b border-line pb-4">
           <h2 className="text-base font-semibold text-ink">简历原文批改</h2>
           <p className="mt-1 text-sm text-muted">
-            已保留简历原文，但本次报告没有可定位的批改标注。
+            已保留简历原文；完整关键词覆盖请看关键词分析。
           </p>
         </div>
         <div className="mt-5 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
@@ -381,7 +381,7 @@ function AnnotatedResumeView({
       <div className="border-b border-line pb-4">
         <h2 className="text-base font-semibold text-ink">简历原文批改</h2>
         <p className="mt-1 text-sm text-muted">
-          按原文顺序阅读，高亮片段为分析命中位置，批改意见紧附其后。
+          按原文顺序阅读，高亮片段为可定位到原文的批注，完整关键词覆盖请看关键词分析。
         </p>
       </div>
 
