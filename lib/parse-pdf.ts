@@ -1,3 +1,5 @@
+import { join } from "path";
+
 export type ParsedPdfResume = {
   text: string;
   charCount: number;
@@ -18,10 +20,14 @@ type PositionedTextItem = {
 };
 
 type PdfDocumentOptions = {
+  cMapPacked: boolean;
+  cMapUrl: string;
   data: Uint8Array;
   disableFontFace: boolean;
   disableWorker: boolean;
+  standardFontDataUrl: string;
   useWorkerFetch: boolean;
+  wasmUrl?: string;
 };
 
 function cleanExtractedText(rawText: string): string {
@@ -36,6 +42,10 @@ function cleanExtractedText(rawText: string): string {
 
 function getUserError(message: string): Error {
   return new Error(`USER_ERROR:${message}`);
+}
+
+function getPdfjsAssetUrl(...pathSegments: string[]): string {
+  return `${join(...pathSegments).replace(/\\/g, "/")}/`;
 }
 
 function getPositionedTextItem(item: PdfTextItem): PositionedTextItem | null {
@@ -95,11 +105,19 @@ export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
   const { getDocument } = await import(
     "pdfjs-dist/legacy/build/pdf.mjs"
   );
+  const pdfjsRoot = join(process.cwd(), "node_modules", "pdfjs-dist");
+  const standardFontDataUrl = getPdfjsAssetUrl(pdfjsRoot, "standard_fonts");
+  const cMapUrl = getPdfjsAssetUrl(pdfjsRoot, "cmaps");
+  const wasmUrl = getPdfjsAssetUrl(pdfjsRoot, "wasm");
   const documentOptions: PdfDocumentOptions = {
+    cMapPacked: true,
+    cMapUrl,
     data: new Uint8Array(buffer),
     disableFontFace: true,
     disableWorker: true,
-    useWorkerFetch: false
+    standardFontDataUrl,
+    useWorkerFetch: false,
+    wasmUrl
   };
   const loadingTask = getDocument(documentOptions);
   const pdf = await loadingTask.promise;
