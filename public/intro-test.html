@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>intro scene test</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#c9d2c4;}
+  #hud{position:fixed;left:10px;top:10px;z-index:10;font:11px/1.5 monospace;color:#1c241c;background:rgba(255,255,255,0.6);padding:6px 10px;border-radius:6px;white-space:pre;}
+</style>
+</head>
+<body>
+<div id="hud">loading…</div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+const hud = document.getElementById('hud');
+const T = window.__test = { step: 'init', err: '', sizes: {} };
+const log = () => { hud.textContent = T.step + (T.err ? '  ERR:' + T.err : '') + '\n' + JSON.stringify(T.sizes); };
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xc9d2c4);
+scene.fog = new THREE.Fog(0xc9d2c4, 40, 220); // 景深雾
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 5000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xe6f0e0, 0x4a3a2a, 1.0));
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.0);
+sun.position.set(30, 60, 20);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+const forestMgr = new THREE.LoadingManager();
+forestMgr.setURLModifier((url) => (/\.(png|jpe?g)$/i.test(url) ? '/intro/' + url.split(/[\\/]/).pop() : url));
+
+const texLoader = new THREE.TextureLoader();
+function tex(url, srgb) { const t = texLoader.load(url); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; }
+function applyPBR(obj, base) {
+  const map = tex(base + '.png', true);
+  const normalMap = tex(base + '_normal.png');
+  const roughnessMap = tex(base + '_roughness.png');
+  const metalnessMap = tex(base + '_metallic.png');
+  obj.traverse((c) => {
+    if (c.isMesh) c.material = new THREE.MeshStandardMaterial({ map, normalMap, roughnessMap, metalnessMap, metalness: 1, roughness: 1 });
+  });
+}
+
+function boxOf(o) { o.updateMatrixWorld(true); return new THREE.Box3().setFromObject(o); }
+function fit(o, targetMax) {
+  const s0 = boxOf(o).getSize(new THREE.Vector3());
+  o.scale.setScalar(targetMax / Math.max(s0.x, s0.y, s0.z));
+  o.updateMatrixWorld(true);
+}
+// 把物体居中到 (x,z)，底面坐落在 baseY；返回放好后的 box（便于往上叠）
+function place(o, x, z, baseY) {
+  const b = boxOf(o);
+  const c = b.getCenter(new THREE.Vector3());
+  o.position.x += x - c.x;
+  o.position.z += z - c.z;
+  o.position.y += baseY - b.min.y;
+  return boxOf(o);
+}
+
+async function main() {
+  try {
+    T.step = 'load forest'; log();
+    const forest = await new FBXLoader(forestMgr).loadAsync('/intro/sagano_gt4.fbx');
+    T.step = 'load table'; log();
+    const table = await new FBXLoader().loadAsync('/intro/table/Meshy_AI_Long_mahogany_box_0626105114_texture.fbx');
+    T.step = 'load parchment'; log();
+    const parch = await new FBXLoader().loadAsync('/intro/parchment/Meshy_AI_Unrolled_Parchment_0626111956_texture.fbx');
+    T.step = 'load slip'; log();
+    const slip = await new FBXLoader().loadAsync('/intro/竹简.fbx');
+
+    applyPBR(table, '/intro/table/Meshy_AI_Long_mahogany_box_0626105114_texture');
+    applyPBR(parch, '/intro/parchment/Meshy_AI_Unrolled_Parchment_0626111956_texture');
+
+    const sz = (o) => { const s = boxOf(o).getSize(new THREE.Vector3()); return `${s.x.toFixed(0)}×${s.y.toFixed(0)}×${s.z.toFixed(0)}`; };
+    T.sizes.forestRaw = sz(forest); T.sizes.tableRaw = sz(table); T.sizes.parchRaw = sz(parch); T.sizes.slipRaw = sz(slip);
+
+    // 统一到一个世界：森林大、案中等、纸与简小
+    fit(forest, 150); place(forest, 0, 0, 0);
+    fit(table, 18); const tableBox = place(table, 0, 0, 0);
+    const topY = tableBox.max.y;
+    T.sizes.tableTopY = topY.toFixed(1);
+    fit(parch, 11); place(parch, 0, 1.5, topY);
+    fit(slip, 5.5); place(slip, -5, -1, topY);
+
+    scene.add(forest, table, parch, slip);
+
+    // 电影感机位：低角度看向案面，森林在后景虚化
+    camera.position.set(13, topY + 7, 24);
+    camera.lookAt(0, topY + 1.5, 0);
+    controls.target.set(0, topY + 1.5, 0);
+
+    T.step = 'ready'; log();
+  } catch (e) {
+    T.err = (e && e.message) || String(e); T.step = 'FAILED'; log();
+  }
+}
+main();
+
+function tick() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); }
+tick();
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+</script>
+</body>
+</html>
