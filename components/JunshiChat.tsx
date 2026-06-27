@@ -1,6 +1,7 @@
 "use client";
 
-// 军师对话 · 简易界面(粗 UI,功能优先;美化留到统一网页改版)。
+// 军师对话 · 出谋划策(去人设,正常给建议)。
+// 两种形态:embedded=true 填进 AppShell 右栏;默认=右下浮动(向后兼容)。
 // 跨窗口:对话历史存 localStorage,绑这次研判,重开报告还在(同浏览器)。
 
 import { useEffect, useRef, useState } from "react";
@@ -8,9 +9,9 @@ import { JIANPEI_PROFILE_KEY, type AgentReport, type JianpeiProfile } from "@/li
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-export function JunshiChat({ report }: { report: AgentReport }) {
+export function JunshiChat({ report, embedded = false }: { report: AgentReport; embedded?: boolean }) {
   const chatKey = `jianpei:chat:${report.meta.position}|${report.meta.company}|${report.meta.date}`;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,8 +27,7 @@ export function JunshiChat({ report }: { report: AgentReport }) {
     }
   }, [chatKey]);
 
-  // 持久化:跳过空数组——否则初次挂载(+ 开发模式 StrictMode 双挂载)会用空的覆盖掉已存对话，
-  // 这正是"刷新就没了"的根因。
+  // 持久化:跳过空数组——否则初次挂载(+ StrictMode 双挂载)会用空的覆盖掉已存对话。
   useEffect(() => {
     if (messages.length === 0) return;
     try {
@@ -75,7 +75,6 @@ export function JunshiChat({ report }: { report: AgentReport }) {
     }
   }
 
-  // 公司背调:联网搜公司口碑 → 作为军师的一条回话插进对话
   async function recon() {
     if (loading || !report.meta.company) return;
     setError("");
@@ -89,7 +88,6 @@ export function JunshiChat({ report }: { report: AgentReport }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "背调失败");
-      // 不再堆来源标题（太长，且正文结尾已有"来源:公开网络,仅供参考"）
       setMessages((m) => [...m, { role: "assistant", content: data.recon as string }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "背调失败，请重试");
@@ -98,7 +96,8 @@ export function JunshiChat({ report }: { report: AgentReport }) {
     }
   }
 
-  if (!open) {
+  // 浮动模式未展开 → 只露一个圆按钮
+  if (!embedded && !open) {
     return (
       <button
         type="button"
@@ -111,21 +110,20 @@ export function JunshiChat({ report }: { report: AgentReport }) {
     );
   }
 
-  return (
-    <div
-      className="fixed bottom-6 right-6 z-40 flex w-[370px] max-w-[92vw] flex-col rounded-xl border border-gf-rule bg-gf-paper"
-      style={{ height: "70vh", maxHeight: 560, boxShadow: "0 12px 34px rgba(35,39,31,0.22)" }}
-    >
-      <div className="flex items-center justify-between border-b border-gf-rule px-4 py-2.5">
+  const panel = (
+    <>
+      <div className="flex shrink-0 items-center justify-between border-b border-gf-rule px-4 py-2.5">
         <span className="font-serifcn text-[15px] font-medium text-gf-ink">
-          军师对话 <span className="text-[11px] font-normal text-gf-faint">· 扎根你这份研判</span>
+          军师对话 <span className="text-[11px] font-normal text-gf-faint">· 扎根本次研判</span>
         </span>
-        <button type="button" onClick={() => setOpen(false)} className="text-[13px] text-gf-faint hover:text-gf-ink">
-          收起
-        </button>
+        {!embedded && (
+          <button type="button" onClick={() => setOpen(false)} className="text-[13px] text-gf-faint transition-colors hover:text-gf-ink">
+            收起
+          </button>
+        )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {messages.length === 0 && (
           <div className="mt-2 text-[13px] leading-relaxed text-gf-faint">
             看完研判,想问什么都行——比如:
@@ -151,7 +149,7 @@ export function JunshiChat({ report }: { report: AgentReport }) {
         {error && <div className="text-[12.5px] text-gf-seal">{error}</div>}
       </div>
 
-      <div className="border-t border-gf-rule p-2.5">
+      <div className="shrink-0 border-t border-gf-rule p-2.5">
         {report.meta.company && (
           <button
             type="button"
@@ -185,6 +183,19 @@ export function JunshiChat({ report }: { report: AgentReport }) {
           </button>
         </div>
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="flex h-full w-full flex-col bg-gf-paper">{panel}</div>;
+  }
+
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-40 flex w-[370px] max-w-[92vw] flex-col rounded-xl border border-gf-rule bg-gf-paper"
+      style={{ height: "70vh", maxHeight: 560, boxShadow: "0 12px 34px rgba(35,39,31,0.22)" }}
+    >
+      {panel}
     </div>
   );
 }
