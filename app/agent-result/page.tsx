@@ -9,6 +9,7 @@ import Link from "next/link";
 import { AGENT_REPORT_KEY, statusKind, type AgentReport } from "@/lib/agent-report";
 import { JunshiChat } from "@/components/JunshiChat";
 import { AppShell } from "@/components/AppShell";
+import { AppNav } from "@/components/AppNav";
 
 const GF_TEXTURE = {
   backgroundImage:
@@ -80,53 +81,6 @@ function SubNote({ label, text }: { label: string; text: string }) {
         <span className="font-serifcn text-[13.5px] font-semibold text-gf-ink">{label}</span>
       </div>
       <p className="pl-[15px] text-[13px] leading-relaxed text-gf-soft">{text}</p>
-    </div>
-  );
-}
-
-function NavRow({ label, tag, active, soon }: { label: string; tag?: string; active?: boolean; soon?: boolean }) {
-  return (
-    <div
-      className={`mb-0.5 flex items-center justify-between rounded-md px-2.5 py-1.5 text-[13px] ${
-        active ? "bg-gf-greentint font-medium text-gf-greend" : soon ? "text-gf-faint" : "text-gf-soft"
-      }`}
-    >
-      <span className="flex items-center gap-1.5">
-        {label}
-        {tag && <span className="text-[10px] text-gf-green">{tag}</span>}
-      </span>
-      {soon && <span className="text-[10px] text-gf-faint">待建</span>}
-    </div>
-  );
-}
-
-function NavContent({ report }: { report: AgentReport | null }) {
-  const histLabel = report ? [report.meta.company, report.meta.position].filter(Boolean).join(" · ") || "本次研判" : null;
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center border-b border-gf-rule px-4">
-        <span className="font-serifcn text-[16px] font-semibold text-gf-ink">
-          简<span className="text-gf-green">配</span>
-        </span>
-      </div>
-      <nav className="flex-1 overflow-y-auto px-2.5 py-3">
-        <div className="px-2 pb-1.5 text-[11px] tracking-wide text-gf-faint">功能</div>
-        <NavRow label="岗位研判" active />
-        <NavRow label="个人简历" soon />
-        <NavRow label="职业规划" tag="小简" soon />
-        <NavRow label="简历修改" soon />
-        <div className="mt-3 border-t border-gf-rule px-2 pb-1.5 pt-3 text-[11px] tracking-wide text-gf-faint">历史记录</div>
-        {histLabel ? (
-          <div className="rounded-md bg-gf-greentint px-2.5 py-1.5 text-[12.5px] leading-snug text-gf-greend">{histLabel}</div>
-        ) : (
-          <div className="px-2.5 text-[12px] text-gf-faint">还没有研判</div>
-        )}
-      </nav>
-      <div className="shrink-0 border-t border-gf-rule px-4 py-2.5">
-        <Link href="/agent" className="text-[12.5px] text-gf-soft transition-colors hover:text-gf-green">
-          + 研判一个新岗位
-        </Link>
-      </div>
     </div>
   );
 }
@@ -358,7 +312,7 @@ export default function AgentResultPage() {
   return (
     <AppShell
       brand={<span className="truncate text-[13.5px] text-gf-soft">{title}</span>}
-      nav={<NavContent report={report} />}
+      nav={<AppNav active="verdict" histLabel={[report.meta.company, report.meta.position].filter(Boolean).join(" · ") || null} />}
       aside={<JunshiChat report={report} embedded />}
     >
       <VerdictView report={report} />
