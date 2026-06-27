@@ -9,6 +9,11 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
 }
 
 html {
@@ -32,6 +37,27 @@ textarea {
 
 ::selection {
   background: rgba(0, 180, 204, 0.16);
+}
+
+@keyframes gf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.gf-rise {
+  animation: gf-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-rise {
+    animation: none;
+  }
 }
 
 .keyword-scroll {

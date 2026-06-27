@@ -25,12 +25,10 @@ export default function ResumePage() {
 
   if (!loaded) return null;
 
-  const histLabel = report ? [report.meta.company, report.meta.position].filter(Boolean).join(" · ") || null : null;
-
   return (
     <AppShell
       brand={<span className="truncate text-[13.5px] text-gf-soft">简历修改</span>}
-      nav={<AppNav active="resume" histLabel={histLabel} />}
+      nav={<AppNav />}
     >
       <ResumeWorkbench strategy={report?.actionPlan.resumeStrategy ?? null} />
     </AppShell>

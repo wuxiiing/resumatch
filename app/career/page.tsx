@@ -88,7 +88,7 @@ export default function CareerPage() {
   const hasResume = Boolean(profile?.resumeText);
 
   return (
-    <AppShell brand={<span className="truncate text-[13.5px] text-gf-soft">职业规划 · 小简</span>} nav={<AppNav active="career" />}>
+    <AppShell brand={<span className="truncate text-[13.5px] text-gf-soft">职业规划 · 小简</span>} nav={<AppNav current="career" />}>
       <div className="mx-auto flex h-full max-w-[720px] flex-col px-4 py-4 sm:px-6">
         <header className="mb-3 shrink-0 border-b border-gf-rule pb-3">
           <h1 className="font-serifcn text-[20px] font-semibold text-gf-ink">

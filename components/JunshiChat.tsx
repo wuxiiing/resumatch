@@ -42,8 +42,8 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(quick?: string) {
+    const text = (quick ?? input).trim();
     if (!text || loading) return;
     setError("");
     setInput("");
@@ -125,11 +125,22 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
 
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {messages.length === 0 && (
-          <div className="mt-2 text-[13px] leading-relaxed text-gf-faint">
-            看完研判,想问什么都行——比如:
-            <br />「这岗我到底要不要投?」
-            <br />「面试该怎么准备?」
-            <br />「帮我把简历里最弱那条改强点。」
+          <div className="mt-1 space-y-2.5">
+            <div className="rounded-xl rounded-tl-sm border border-gf-rule bg-gf-paper px-3.5 py-2.5 font-serifcn text-[13px] leading-relaxed text-gf-soft">
+              看完研判,有什么想不透的尽管问——投不投、怎么面、简历哪条弱,我都在。
+            </div>
+            <div className="space-y-1.5">
+              {["这岗我到底要不要投?", "面试该怎么准备?", "帮我把简历里最弱那条改强点。"].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => send(q)}
+                  className="block w-full rounded-lg border border-gf-rule bg-gf-surface px-3 py-2 text-left text-[12.5px] text-gf-soft transition-colors hover:border-gf-green hover:bg-gf-greentint/40"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (
@@ -175,7 +186,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
           />
           <button
             type="button"
-            onClick={send}
+            onClick={() => send()}
             disabled={loading || !input.trim()}
             className="rounded-md bg-gf-green px-3 py-2 text-[13px] text-white disabled:opacity-50"
           >
