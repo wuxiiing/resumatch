@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AGENT_REPORT_KEY, statusKind, type AgentReport } from "@/lib/agent-report";
 import { JunshiChat } from "@/components/JunshiChat";
+import { ResumeWorkbench } from "@/components/ResumeWorkbench";
 
 const GF_TEXTURE = {
   backgroundImage:
@@ -369,6 +370,8 @@ export default function AgentResultPage() {
               </p>
             )}
           </section>
+
+          <ResumeWorkbench strategy={plan.resumeStrategy} />
 
           <footer className="mt-9 border-t border-gf-rule pt-3 text-[11px] leading-relaxed text-gf-faint">
             本研判基于公开 JD 文本与你提供的简历，不构成承诺；岗位定位由后端规则判定、稳定，匹配为逐条命中派生。AI 多次运行措辞或有轻微波动。— 不编造，可追溯。

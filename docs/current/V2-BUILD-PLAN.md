@@ -52,7 +52,7 @@
 - **功能路线图（这些做完 = 功能齐）：**
   1. ✅ 岗位研判（JD 解读 → 报告）
   2. 🟡 军师对话（`/api/agent-chat` + 结果页「问军师」面板，扎根报告+简历的多轮，本地持久历史）—— 已建 + UI 实测过；真 DeepSeek 回复待用户跑
-  3. ⬜ 修改简历 + 导出（复用 `/api/export-word` + 加 PDF）
+  3. ✅ 修改简历 + 导出 —— 结果页底部「简历工作台」：从本地档案预填可编辑副本 + 一键纳入扬长/避短建议 + 导出 Word（新增 `/api/export-resume` + `lib/export-resume.ts`，**没复用** MVP 的 export-word）+ 导出 PDF（浏览器打印隐藏 iframe，A4 宋体，零依赖）。浏览器端到端验证过（渲染/纳入/Word 200/PDF iframe 均通，零 console 错误）。**轻方案**：before→after 结构化改写卡留作后续增强。
   4. ⬜ 职业规划（用户给 prompt 的独立板块）
   5. 🟡 公司背调 —— `/api/company-recon`（Tavily 联网搜 → DeepSeek 综合，只依据搜到的、标来源、不编造）+ 对话「背调」按钮（仅当填了公司名时显示）。已建 + UI 实测；真 Tavily/DeepSeek 调用待用户点。tier=方向、背调=公司质量，两维度分开。
-- **下一步：修改简历 + 导出。**
+- **下一步：职业规划板块（用户给 prompt 的独立板块；可结合 knowledge/ 语料：专业→岗位）。**
