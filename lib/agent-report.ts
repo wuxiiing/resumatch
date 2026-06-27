@@ -32,6 +32,18 @@ export type ActionPlan = {
   salaryTip: string;
 };
 
+// 方向校准（小简）·「意愿 vs 现实」对照。镜像 lib/agents/career-fit/schema.ts（只要类型，不拉验证函数）。
+export type RealisticDirection = { direction: string; strength: string; basis: string };
+export type FitGap = { dimension: string; missing: string; whyHard: string };
+export type CareerFit = {
+  snapshot: string;
+  realisticDirections: RealisticDirection[];
+  aligned: boolean;
+  verdict: string;
+  gaps: FitGap[];
+  suggestion: string;
+};
+
 export type UserIntent = { targetDirection: string; hardNo: string[] };
 
 export type ReportMeta = { position: string; company: string; date: string };
