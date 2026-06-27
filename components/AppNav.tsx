@@ -8,7 +8,7 @@ export type NavKey = "verdict" | "profile" | "career" | "resume";
 
 const FN_ITEMS: { key: NavKey; label: string; href?: string; tag?: string }[] = [
   { key: "verdict", label: "岗位研判", href: "/agent-result" },
-  { key: "profile", label: "个人简历" },
+  { key: "profile", label: "个人简历", href: "/profile" },
   { key: "career", label: "职业规划", href: "/career", tag: "小简" },
   { key: "resume", label: "简历修改", href: "/resume" }
 ];
