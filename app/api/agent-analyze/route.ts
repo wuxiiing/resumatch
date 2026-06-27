@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 
 import { graph } from "@/lib/agents/graph.ts";
 import type { UserIntent } from "@/lib/agents/user-intent.ts";
+import { consumeAgentLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 // 工作流串行调 4 次 DeepSeek，需要较长时间（Vercel 生产需 Pro 才能放宽到这个时长）。
@@ -32,6 +33,9 @@ export async function POST(request: Request) {
   }
 
   const userIntent: UserIntent = body.userIntent ?? { targetDirection: "", hardNo: [] };
+
+  const rl = consumeAgentLimit("analyze", request.headers);
+  if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
   try {
     const result = await graph.invoke({ resumeText, jobDescription, userIntent });

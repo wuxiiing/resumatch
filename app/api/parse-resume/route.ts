@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { consumeAgentLimit } from "@/lib/rate-limit";
 import { parseDocxResume } from "@/lib/parse-docx";
 import { parsePdfResume } from "@/lib/parse-pdf";
 import { parseTxtResume } from "@/lib/parse-txt";
@@ -61,6 +62,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const rl = consumeAgentLimit("resume", request.headers);
+    if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
     const parsedResume = await (async () => {
       if (fileType === "txt") {

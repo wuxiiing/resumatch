@@ -2,6 +2,7 @@
 // 原理同军师对话:系统人设 + 注入上下文(简历+意愿) + 对话历史 → DeepSeek chat。不动旧 MVP。
 
 import { NextResponse } from "next/server";
+import { consumeAgentLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -38,6 +39,9 @@ export async function POST(req: Request) {
   if (history.length === 0) {
     return NextResponse.json({ error: "缺少对话消息。" }, { status: 400 });
   }
+
+  const rl = consumeAgentLimit("career", req.headers);
+  if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {

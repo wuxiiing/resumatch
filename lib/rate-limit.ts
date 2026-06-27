@@ -134,3 +134,45 @@ export function getAnalyzeRateLimitClientIp(headers: Headers): string {
 export function consumeAnalyzeRateLimit(ip: string): RateLimitResult {
   return analyzeRateLimiter.consume(ip);
 }
+
+// ─── 2.0 各功能限额（复用上面的内存限额器；生产化同样换 KV）──────────────
+export type AgentAction = "analyze" | "resume" | "career" | "recon" | "edit";
+
+const AGENT_LIMITS: Record<AgentAction, number> = {
+  analyze: 5, // 岗位研判（4 次 DeepSeek，最贵）
+  resume: 2, // 简历解析（上传）
+  career: 20, // 和小简聊天（每条消息一次，放宽）
+  recon: 5, // 公司背调（联网搜）
+  edit: 5 // 简历导出
+};
+
+const AGENT_LABEL: Record<AgentAction, string> = {
+  analyze: "岗位研判",
+  resume: "简历解析",
+  career: "和小简聊天",
+  recon: "公司背调",
+  edit: "简历导出"
+};
+
+const agentLimiters: Record<AgentAction, ReturnType<typeof createMemoryRateLimiter>> = {
+  analyze: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.analyze, siteDailyLimit: 500 }),
+  resume: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.resume, siteDailyLimit: 300 }),
+  career: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.career, siteDailyLimit: 2000 }),
+  recon: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.recon, siteDailyLimit: 300 }),
+  edit: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.edit, siteDailyLimit: 500 })
+};
+
+// 给 2.0 各 API 用：取 IP → 计数 → 超限给带功能名的文案。
+export function consumeAgentLimit(action: AgentAction, headers: Headers): RateLimitResult {
+  const ip = getAnalyzeRateLimitClientIp(headers);
+  const r = agentLimiters[action].consume(ip);
+  if (!r.ok) {
+    const label = AGENT_LABEL[action];
+    const error =
+      r.reason === "site"
+        ? `今天全站「${label}」太火爆了，明天再来。`
+        : `今天「${label}」的免费次数（${AGENT_LIMITS[action]} 次/天）用完了，明天再来。`;
+    return { ...r, error };
+  }
+  return r;
+}

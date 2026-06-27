@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateResumeDocx, getResumeExportHeaders } from "@/lib/export-resume";
+import { consumeAgentLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,9 @@ export async function POST(request: Request) {
     if (resumeText.trim() === "") {
       return NextResponse.json({ error: "简历内容为空。" }, { status: 400 });
     }
+
+    const rl = consumeAgentLimit("edit", request.headers);
+    if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
     const name = typeof payload.name === "string" ? payload.name : "简历";
     const buffer = await generateResumeDocx(resumeText);
