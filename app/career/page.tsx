@@ -54,8 +54,8 @@ export default function CareerPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(quick?: string) {
+    const text = (quick ?? input).trim();
     if (!text || loading || !profile?.resumeText) return;
     setError("");
     setInput("");
@@ -89,7 +89,7 @@ export default function CareerPage() {
 
   return (
     <AppShell brand={<span className="truncate text-[13.5px] text-gf-soft">职业规划 · 小简</span>} nav={<AppNav current="career" />}>
-      <div className="mx-auto flex h-full max-w-[720px] flex-col px-4 py-4 sm:px-6">
+      <div className="gf-rise mx-auto flex h-full max-w-[720px] flex-col px-4 py-4 sm:px-6">
         <header className="mb-3 shrink-0 border-b border-gf-rule pb-3">
           <h1 className="font-serifcn text-[20px] font-semibold text-gf-ink">
             小简 <span className="text-[13px] font-normal text-gf-faint">· 职业规划老师</span>
@@ -112,6 +112,20 @@ export default function CareerPage() {
             </div>
           )}
 
+          {hasResume && messages.length === 0 && (
+            <div className="ml-[42px] space-y-1.5">
+              {["我这简历能往哪些方向走?", "我想去某个方向,现实吗?", "要够格还差点啥?"].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => send(q)}
+                  className="block w-full rounded-lg border border-gf-rule bg-gf-surface px-3 py-2 text-left text-[12.5px] text-gf-soft transition-colors hover:border-gf-green hover:bg-gf-greentint/40"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "user" ? "flex justify-end" : "flex gap-2.5"}>
               {m.role === "assistant" && <Avatar />}
@@ -153,7 +167,7 @@ export default function CareerPage() {
             />
             <button
               type="button"
-              onClick={send}
+              onClick={() => send()}
               disabled={!hasResume || loading || !input.trim()}
               className="h-11 shrink-0 rounded-md bg-gf-green px-4 font-serifcn text-[14px] text-white transition-colors hover:bg-gf-greend disabled:opacity-50"
             >

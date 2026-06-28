@@ -70,7 +70,7 @@ export default function ProfilePage() {
 
   return (
     <AppShell brand={<span className="truncate text-[13.5px] text-gf-soft">个人简历</span>} nav={<AppNav current="profile" />}>
-      <div className="mx-auto max-w-[760px] px-5 py-8 sm:px-8">
+      <div className="gf-rise mx-auto max-w-[760px] px-5 py-8 sm:px-8">
         <header className="mb-6">
           <div className="mb-2 flex items-center gap-2 text-[12px] font-medium tracking-wide text-gf-green">
             <span className="inline-block h-3 w-[5px] rounded-[2px] bg-gf-green" /> 个人简历
