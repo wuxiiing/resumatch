@@ -1,6 +1,10 @@
 # ResuMatch Current State
 
-Last updated: 2026-06-24
+> **2.0 进行中（2026-06-28）**：简配 2.0「求职军师」功能基本齐 + 设计统一升级一轮 + 简历修改重做。
+> 新窗口先读 [HANDOFF-2026-06-28.md](HANDOFF-2026-06-28.md)（最新交接：journey / 关键决策 / 怎么跑 / 下一步 / 坑）+ 根目录 `PRODUCT.md`。
+> 下面这份是已部署 **MVP** 的状态（不动 MVP）。
+
+Last updated: 2026-06-24（MVP）
 
 ## Project Snapshot
 
