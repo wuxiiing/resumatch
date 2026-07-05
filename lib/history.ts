@@ -3,7 +3,7 @@
 
 import { AGENT_REPORT_KEY, JIANPEI_PROFILE_KEY, type AgentReport, type JianpeiProfile } from "@/lib/agent-report";
 
-export type HistoryItem = { id: string; label: string; date: string; createdAt: number; resumeText: string; report: AgentReport };
+export type HistoryItem = { id: string; label: string; date: string; createdAt: number; resumeText: string; customLabel?: string; report: AgentReport };
 
 const HISTORY_KEY = "jianpei:history";
 const MAX = 20;
@@ -46,17 +46,19 @@ export function saveToHistory(report: AgentReport): void {
     const id = historyIdOf(report);
     const prev = loadHistory();
     const existing = prev.find((it) => it.id === id);
-    const rest = prev.filter((it) => it.id !== id);
-    // 简历原文快照：新研判抓当前档案的简历并冻结；重看旧研判保留原快照。
+    // 简历原文快照：新研判抓当前档案的简历并冻结；重看旧研判保留原快照与自定义名。
     const item: HistoryItem = {
       id,
       label: historyLabelOf(report),
       date: report.meta.date,
       createdAt: existing?.createdAt ?? Date.now(),
       resumeText: existing?.resumeText || currentProfileResumeText(),
+      customLabel: existing?.customLabel,
       report,
     };
-    const next = [item, ...rest].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX);
+    // 重存：原地替换、位置不变（同日多条不再因重看而乱动）；只有新研判才置顶。
+    const merged = existing ? prev.map((it) => (it.id === id ? item : it)) : [item, ...prev];
+    const next = merged.sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   } catch {
     /* 存不下不影响主流程 */
@@ -67,6 +69,18 @@ export function saveToHistory(report: AgentReport): void {
 export function removeFromHistory(id: string): HistoryItem[] {
   try {
     const list = loadHistory().filter((it) => it.id !== id);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+    return list;
+  } catch {
+    return loadHistory();
+  }
+}
+
+// 用户给某条研判起自定义名（不改 id，避免破坏简历/结构化按 id 的绑定）。返回更新后的列表。
+export function renameHistory(id: string, name: string): HistoryItem[] {
+  try {
+    const clean = name.trim();
+    const list = loadHistory().map((it) => (it.id === id ? { ...it, customLabel: clean || undefined } : it));
     localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
     return list;
   } catch {

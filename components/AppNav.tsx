@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadHistory, openHistoryItem, removeFromHistory, type HistoryItem } from "@/lib/history";
+import { loadHistory, openHistoryItem, removeFromHistory, renameHistory, type HistoryItem } from "@/lib/history";
 
 function BambooFoot() {
   return (
@@ -25,9 +25,16 @@ function BambooFoot() {
 
 export function AppNav({ current }: { current?: "profile" | "career" }) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
   useEffect(() => {
     setHistory(loadHistory());
   }, []);
+
+  function commitRename(id: string) {
+    setHistory(renameHistory(id, draft));
+    setEditingId(null);
+  }
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -84,19 +91,50 @@ export function AppNav({ current }: { current?: "profile" | "career" }) {
                 key={it.id}
                 className="group relative rounded-lg transition-all duration-150 ease-out hover:translate-x-0.5 hover:bg-gf-greentint/60"
               >
-                <button type="button" onClick={() => openHistoryItem(it)} className="block w-full px-2.5 py-2 pr-7 text-left">
-                  <div className="truncate text-[13px] text-gf-soft transition-colors group-hover:text-gf-greend">{it.label}</div>
-                  <div className="text-[10.5px] text-gf-faint">{it.date}</div>
-                </button>
-                <button
-                  type="button"
-                  aria-label="删除这条研判"
-                  title="删除"
-                  onClick={() => setHistory(removeFromHistory(it.id))}
-                  className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-[12px] text-gf-faint transition-colors hover:text-gf-seal group-hover:block"
-                >
-                  ✕
-                </button>
+                {editingId === it.id ? (
+                  <input
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={() => commitRename(it.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename(it.id);
+                      else if (e.key === "Escape") setEditingId(null);
+                    }}
+                    placeholder="给这次研判起个名"
+                    className="w-full rounded-lg bg-gf-surface px-2.5 py-2 text-[13px] text-gf-ink outline-none ring-1 ring-gf-green"
+                  />
+                ) : (
+                  <>
+                    <button type="button" onClick={() => openHistoryItem(it)} className="block w-full px-2.5 py-2 pr-12 text-left">
+                      <div className="truncate text-[13px] text-gf-soft transition-colors group-hover:text-gf-greend">{it.customLabel || it.label}</div>
+                      <div className="text-[10.5px] text-gf-faint">{it.date}</div>
+                    </button>
+                    <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
+                      <button
+                        type="button"
+                        aria-label="重命名"
+                        title="重命名"
+                        onClick={() => {
+                          setDraft(it.customLabel || it.label);
+                          setEditingId(it.id);
+                        }}
+                        className="rounded p-1 text-[11px] text-gf-faint transition-colors hover:text-gf-greend"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="删除这条研判"
+                        title="删除"
+                        onClick={() => setHistory(removeFromHistory(it.id))}
+                        className="rounded p-1 text-[12px] text-gf-faint transition-colors hover:text-gf-seal"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>

@@ -13,7 +13,7 @@ type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_KEY = "jianpei:career-chat";
 const OPENING =
-  "你好,我是小简,你的职业规划老师。我看了你的简历和你想去的方向——想聊往哪走、还差什么、哪条路更稳,都可以问我。我扎着你的简历说实话,不画饼。";
+  "你好,我是小简,你的职业规划老师。我看了你的简历和你想去的方向——想聊往哪走、还差什么、哪条路更稳,都可以问我。我只照着你的简历和现实讲,不哄你。";
 
 function Avatar() {
   return <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gf-green font-serifcn text-[14px] text-white">简</div>;
@@ -88,13 +88,13 @@ export default function CareerPage() {
   const hasResume = Boolean(profile?.resumeText);
 
   return (
-    <AppShell tone="bg-[#eef0e0]" brand={<span className="truncate text-[13.5px] text-gf-soft">职业规划 · 小简</span>} nav={<AppNav current="career" />}>
+    <AppShell tone="bg-[#f4efe3]" brand={<span className="truncate text-[13.5px] text-gf-soft">职业规划 · 小简</span>} nav={<AppNav current="career" />}>
       <div className="gf-rise mx-auto flex h-full max-w-[720px] flex-col px-4 py-4 sm:px-6">
         <header className="mb-3 shrink-0 border-b border-gf-rule pb-3">
           <h1 className="font-serifcn text-[20px] font-semibold text-gf-ink">
             小简 <span className="text-[13px] font-normal text-gf-faint">· 职业规划老师</span>
           </h1>
-          <p className="mt-0.5 text-[12px] text-gf-faint">扎根你的简历和意愿,陪你把方向聊清楚——不画 30/90/180 的时间饼。</p>
+          <p className="mt-0.5 text-[12px] text-gf-faint">扎根你的简历和求职意愿,陪你把方向聊清楚——能往哪走、还差什么、哪条路更稳。</p>
         </header>
 
         <div ref={scrollRef} className="min-h-0 flex-1 space-y-3.5 overflow-y-auto pr-1">

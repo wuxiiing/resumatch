@@ -77,7 +77,7 @@ export default function ProfilePage() {
           </div>
           <h1 className="font-serifcn text-[26px] font-semibold text-gf-ink">长期档案</h1>
           <p className="mt-1.5 max-w-[60ch] text-[12.5px] leading-relaxed text-gf-faint">
-            你的简历和求职意愿——<strong className="text-gf-soft">一处设好,处处都用</strong>:研判、小简、简历修改都读这份档案,换岗位不用重贴。
+            你的简历和求职意愿,在这儿存一次——研判、改简历、问小简都读它,换岗位不用重贴。
           </p>
         </header>
 
