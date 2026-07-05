@@ -17,6 +17,8 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  // 有效公司名：优先 meta.company，退回 ① 推断的最可能公司（很多研判 meta 没填公司，只在 orgGuess 里）。
+  const company = report.meta.company?.trim() || report.jdAnalysis.orgGuess?.candidates[0]?.name?.trim() || "";
 
   useEffect(() => {
     try {
@@ -76,15 +78,15 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
   }
 
   async function recon() {
-    if (loading || !report.meta.company) return;
+    if (loading || !company) return;
     setError("");
-    setMessages((m) => [...m, { role: "user", content: `背调一下「${report.meta.company}」` }]);
+    setMessages((m) => [...m, { role: "user", content: `背调一下「${company}」` }]);
     setLoading(true);
     try {
       const res = await fetch("/api/company-recon", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: report.meta.company, position: report.meta.position })
+        body: JSON.stringify({ company, position: report.meta.position })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "背调失败");
@@ -98,7 +100,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
 
   // 岗位真实性调查:联网搜招聘帖,看发布时长/重复度（信号非铁证）。结果同样进对话。
   async function investigateJob() {
-    if (loading || !report.meta.company) return;
+    if (loading || !company) return;
     setError("");
     setMessages((m) => [...m, { role: "user", content: `调查一下「${report.meta.position || "这个岗位"}」这岗真不真` }]);
     setLoading(true);
@@ -106,7 +108,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
       const res = await fetch("/api/job-recon", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: report.meta.company, position: report.meta.position })
+        body: JSON.stringify({ company, position: report.meta.position })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "岗位调查失败");
@@ -184,28 +186,24 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
 
       <div className="shrink-0 border-t border-gf-rule p-2.5">
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {report.meta.company && (
-            <button
-              type="button"
-              onClick={recon}
-              disabled={loading}
-              title="联网搜公司口碑 / 加班 / 员工评价"
-              className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
-            >
-              背调公司
-            </button>
-          )}
-          {report.meta.company && (
-            <button
-              type="button"
-              onClick={investigateJob}
-              disabled={loading}
-              title="联网查这岗位的发布时长 / 重复度,判断真实性（信号非铁证）"
-              className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
-            >
-              调查岗位
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={recon}
+            disabled={loading || !company}
+            title={company ? `联网搜「${company}」口碑 / 加班 / 员工评价` : "这次研判没识别出公司,无法背调"}
+            className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
+          >
+            背调公司
+          </button>
+          <button
+            type="button"
+            onClick={investigateJob}
+            disabled={loading || !company}
+            title={company ? "联网查这岗位的发布时长 / 重复度,判断真实性（信号非铁证）" : "这次研判没识别出公司,无法调查"}
+            className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
+          >
+            调查岗位
+          </button>
           <button
             type="button"
             onClick={() => send("这个岗位面试大概会考什么?我该怎么准备?")}
