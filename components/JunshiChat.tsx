@@ -96,6 +96,28 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
     }
   }
 
+  // 岗位真实性调查:联网搜招聘帖,看发布时长/重复度（信号非铁证）。结果同样进对话。
+  async function investigateJob() {
+    if (loading || !report.meta.company) return;
+    setError("");
+    setMessages((m) => [...m, { role: "user", content: `调查一下「${report.meta.position || "这个岗位"}」这岗真不真` }]);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/job-recon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: report.meta.company, position: report.meta.position })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "岗位调查失败");
+      setMessages((m) => [...m, { role: "assistant", content: data.recon as string }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "岗位调查失败，请重试");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 浮动模式未展开 → 只露一个圆按钮
   if (!embedded && !open) {
     return (
@@ -130,7 +152,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
               看完研判,有什么想不透的尽管问——投不投、怎么面、简历哪条弱,我都在。
             </div>
             <div className="space-y-1.5">
-              {["这岗我到底要不要投?", "面试该怎么准备?", "帮我把简历里最弱那条改强点。"].map((q) => (
+              {["这岗我到底要不要投?", "薪资大概能谈到什么水平?", "帮我把简历里最弱那条改强点。"].map((q) => (
                 <button
                   key={q}
                   type="button"
@@ -161,16 +183,39 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
       </div>
 
       <div className="shrink-0 border-t border-gf-rule p-2.5">
-        {report.meta.company && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {report.meta.company && (
+            <button
+              type="button"
+              onClick={recon}
+              disabled={loading}
+              title="联网搜公司口碑 / 加班 / 员工评价"
+              className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
+            >
+              背调公司
+            </button>
+          )}
+          {report.meta.company && (
+            <button
+              type="button"
+              onClick={investigateJob}
+              disabled={loading}
+              title="联网查这岗位的发布时长 / 重复度,判断真实性（信号非铁证）"
+              className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
+            >
+              调查岗位
+            </button>
+          )}
           <button
             type="button"
-            onClick={recon}
+            onClick={() => send("这个岗位面试大概会考什么?我该怎么准备?")}
             disabled={loading}
-            className="mb-2 rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
+            title="针对这个岗位的面试准备"
+            className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
           >
-            背调「{report.meta.company}」· 联网搜口碑
+            面试方法
           </button>
-        )}
+        </div>
         <div className="flex items-end gap-2">
           <textarea
             className="h-10 max-h-28 flex-1 resize-none rounded-md border border-gf-rule bg-gf-surface/60 px-3 py-2 text-[13.5px] text-gf-ink outline-none focus:border-gf-green"
