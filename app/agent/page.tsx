@@ -325,8 +325,10 @@ export default function AgentInputPage() {
         const res = await fetch("/api/parse-resume", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok || !data.text) throw new Error(data.error || "文件解析失败");
-        // 文档多半是简历,但也可能是存成文件的 JD——分诊确认一下,失败就按简历
-        let kind = "resume";
+        // 文档多半是简历,但也可能是存成文件的 JD。先用文件名给个确定信号
+        // (防 intake-text 分诊瞬时失败时把 JD 误当简历),再让分诊来纠正。
+        const nameLooksLikeJd = /jd|job|岗位|招聘|职位|职务/i.test(file.name);
+        let kind: "resume" | "jd" = nameLooksLikeJd ? "jd" : "resume";
         try {
           const c = await fetch("/api/intake-text", {
             method: "POST",
@@ -335,8 +337,9 @@ export default function AgentInputPage() {
           });
           const cd = await c.json();
           if (c.ok && cd.kind === "jd") kind = "jd";
+          else if (c.ok && cd.kind === "resume") kind = "resume"; // 分诊明确说简历,盖过文件名误报
         } catch {
-          /* 分诊失败按简历 */
+          /* 分诊失败:沿用文件名判断,不再一律当简历 */
         }
         if (kind === "jd") applyIntake({ jdText: data.text, confirm: `〔${file.name}〕读完了——是份岗位描述,已入卷。` });
         else applyIntake({ resume: data.text, resumeName: file.name, confirm: `〔${file.name}〕已收入案头。` });

@@ -140,7 +140,7 @@ export type AgentAction = "analyze" | "resume" | "career" | "recon" | "edit";
 
 const AGENT_LIMITS: Record<AgentAction, number> = {
   analyze: 5, // 岗位研判（4 次 DeepSeek，最贵）
-  resume: 2, // 简历解析（上传）
+  resume: 5, // 简历解析（上传/图片 OCR/结构化，3 路由共用；parse 本身不调 LLM）
   career: 20, // 和小简聊天（每条消息一次，放宽）
   recon: 5, // 公司背调（联网搜）
   edit: 5 // 简历导出
@@ -164,6 +164,10 @@ const agentLimiters: Record<AgentAction, ReturnType<typeof createMemoryRateLimit
 
 // 给 2.0 各 API 用：取 IP → 计数 → 超限给带功能名的文案。
 export function consumeAgentLimit(action: AgentAction, headers: Headers): RateLimitResult {
+  // 本地测试放行：.env.local 设 RATE_LIMIT_BYPASS=1 即全放行，不计数。生产环境绝不要设此变量。
+  if (process.env.RATE_LIMIT_BYPASS === "1") {
+    return { ok: true, dayKey: "bypass", ipCount: 0, siteCount: 0 };
+  }
   const ip = getAnalyzeRateLimitClientIp(headers);
   const r = agentLimiters[action].consume(ip);
   if (!r.ok) {
