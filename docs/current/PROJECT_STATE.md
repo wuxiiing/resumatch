@@ -1,6 +1,7 @@
 # ResuMatch Current State
 
-> **最新（2026-07-04）**：R1(竹林+侦探)+ R2(简历模板系统)均已完成。**新窗口先读 [HANDOFF-R2-DONE.md](HANDOFF-R2-DONE.md)**(收尾清单/上线前收口/R3 下一步/风险与红线),再看 `V2-PRODUCT-PLAN.md`。上一程交接 `HANDOFF-2026-07-04.md` 仍可参考。
+> **最新（2026-07-05）· P0 上线前收口 done**：导出限流(仅下载 `download:true` 计入 `edit` 5/天,实时预览不限)+ 删旧 export 死路由/lib(全仓零引用)+ 新增 `PRODUCTION_CHECKLIST.md`(实核 env)。R1+R2+P0 全部 WIP 已本地存档分支 `save/r1-r2-wip-20260705`(**未 push**)。下一步:P1 人工验证(用户跑)、P2 端到端。
+> **（2026-07-04）**：R1(竹林+侦探)+ R2(简历模板系统)均已完成。**新窗口先读 [HANDOFF-R2-DONE.md](HANDOFF-R2-DONE.md)**(收尾清单/上线前收口/R3 下一步/风险与红线),再看 `V2-PRODUCT-PLAN.md`。上一程交接 `HANDOFF-2026-07-04.md` 仍可参考。
 > **2.0 进行中（2026-06-28）**：简配 2.0「求职军师」功能基本齐 + 设计统一升级一轮 + 简历修改重做。
 > 新窗口先读 [HANDOFF-2026-06-28.md](HANDOFF-2026-06-28.md)（最新交接：journey / 关键决策 / 怎么跑 / 下一步 / 坑）+ 根目录 `PRODUCT.md`。
 > 下面这份是已部署 **MVP** 的状态（不动 MVP）。

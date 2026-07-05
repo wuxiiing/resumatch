@@ -101,7 +101,7 @@ export function ResumeWorkbench() {
       const res = await fetch("/api/export-resume-template", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: "docx", resume })
+        body: JSON.stringify({ format: "docx", resume, download: true })
       });
       if (!res.ok) {
         const d = await res.json();
@@ -125,7 +125,7 @@ export function ResumeWorkbench() {
       const res = await fetch("/api/export-resume-template", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: "pdf", template, resume })
+        body: JSON.stringify({ format: "pdf", template, resume, download: true })
       });
       if (!res.ok) {
         const d = await res.json();
@@ -150,7 +150,7 @@ export function ResumeWorkbench() {
       const res = await fetch("/api/export-resume-template", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: "pdf", template: "ai-pro", resume, report })
+        body: JSON.stringify({ format: "pdf", template: "ai-pro", resume, report, download: true })
       });
       if (!res.ok) {
         const d = await res.json();
