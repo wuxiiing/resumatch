@@ -27,20 +27,22 @@ export function AppShell({
   nav,
   children,
   aside,
-  asideLabel = "问军师"
+  asideLabel = "问军师",
+  tone = "bg-gf-paper" // 页面底色微差:研判=宣纸(默认) / 简历台=象牙 / 小简=微竹青
 }: {
   brand?: ReactNode;
   nav: ReactNode;
   children: ReactNode;
   aside?: ReactNode;
   asideLabel?: string;
+  tone?: string;
 }) {
   const [navCollapsed, setNavCollapsed] = useState(false); // 桌面左栏
   const [asideCollapsed, setAsideCollapsed] = useState(false); // 桌面右栏
   const [drawer, setDrawer] = useState<null | "nav" | "aside">(null); // 移动抽屉
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-gf-paper font-sans text-gf-ink">
+    <div className={`flex h-[100dvh] overflow-hidden ${tone} font-sans text-gf-ink`}>
       {/* 左导航 · 桌面内联收放 */}
       <aside
         className={`hidden shrink-0 overflow-hidden border-r border-gf-rule bg-gf-surface/60 transition-[width] duration-300 ease-out lg:block ${

@@ -3,7 +3,11 @@
 // 「记忆」= 浏览器本地档案（简历+意图持久），不做账号系统；以后上账号时数据结构平移即可。
 
 export type JdSignal = { fromText: string; reads: string };
+export type OrgCandidate = { name: string; prob: number; why: string };
+export type OrgGuess = { candidates: OrgCandidate[]; note: string };
 export type JdAnalysis = {
+  jobTitle: string; // ① 从 JD 认出的岗位名（自动命名用；可空）
+  orgGuess: OrgGuess | null; // ① 公司/业务线推断（带概率；信号不足为 null）
   realIdentity: string;
   whoTheyWant: string;
   signals: JdSignal[];

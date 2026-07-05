@@ -32,14 +32,9 @@ const config: Config = {
         }
       },
       fontFamily: {
-        serifcn: [
-          "Songti SC",
-          "STSong",
-          "Source Han Serif SC",
-          "Noto Serif SC",
-          "SimSun",
-          "serif"
-        ]
+        // SimSun 置顶:Windows 全字库、必然统一(用户机上思源/STSong 疑似残缺子集,谁在前谁造成"部分字借字粗细花")。
+        // macOS 落 Songti SC。要更好看的思源宋,走本地字体文件再提前(见 V2-PRODUCT-PLAN)。
+        serifcn: ["SimSun", "Songti SC", "serif"]
       },
       boxShadow: {
         soft: "0 18px 45px rgba(15, 23, 42, 0.06)"

@@ -8,6 +8,7 @@ export type StructuredResume = {
   headline: string; // 一句话定位 / 头衔
   contacts: string[]; // 城市 / 电话 / 邮箱 / GitHub 等
   sections: ResumeSection[];
+  photo?: string; // 证件照 data URI(base64）；LLM 不解析，由简历工作台上传后带上，可选（国内简历用）
 };
 
 export const RESUME_STRUCTURE_SYSTEM = `你是简历结构化助手。把用户的纯文本简历整理成结构化 JSON——只重组结构,保持原文信息,绝不编造、不夸大、不删减实质内容。
@@ -52,6 +53,7 @@ export function validateStructuredResume(v: unknown): Result<StructuredResume> {
   if (typeof v.headline !== "string") return { ok: false, error: "headline 缺失" };
   if (!isStringArray(v.contacts)) return { ok: false, error: "contacts 结构不正确" };
   if (!Array.isArray(v.sections) || !v.sections.every(isSection)) return { ok: false, error: "sections 结构不正确" };
+  if (v.photo !== undefined && typeof v.photo !== "string") return { ok: false, error: "photo 必须是字符串" };
   return { ok: true, data: v as StructuredResume };
 }
 

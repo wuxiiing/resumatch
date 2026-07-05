@@ -1,4 +1,5 @@
-// LangGraph 编排：① JD 解读 → ② 简历证据 → ③ 匹配判断 → ④ 应对策略（串行）。
+// LangGraph 编排：①JD 解读 与 ②简历证据 并行 → ③匹配判断（等①②都完成）→ ④应对策略。
+// ② 只读 resumeText、不依赖 ①，故与 ① 并行跑，省一次 LLM 往返的串行等待（约 15-20s）。
 // 加节点 = addNode + addEdge + 往 State 加字段，主干不用动——这就是"好扩展"的样子。
 
 import { StateGraph, START, END, Annotation } from "@langchain/langgraph";
@@ -31,8 +32,9 @@ export const graph = new StateGraph(AgentState)
   .addNode("extractEvidence", resumeEvidenceNode)
   .addNode("matchJudge", matchJudgeNode)
   .addNode("planActions", actionPlanNode)
-  .addEdge(START, "analyzeJd")
-  .addEdge("analyzeJd", "extractEvidence")
+  .addEdge(START, "analyzeJd") // ① 与 ② 都从 START 出发 → 并行
+  .addEdge(START, "extractEvidence")
+  .addEdge("analyzeJd", "matchJudge") // ③ 两条入边 → 等 ①② 都完成才跑（fan-in）
   .addEdge("extractEvidence", "matchJudge")
   .addEdge("matchJudge", "planActions")
   .addEdge("planActions", END)

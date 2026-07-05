@@ -3,9 +3,10 @@
 // 简配 2.0 · 简历修改（重做版）。纯文本 → 一键智能整理成结构化 → 逐块编辑 → 专业模板导出。
 // 结构化简历存 localStorage(jianpei:resume-structured);原始纯文本来自档案(jianpei:profile)。
 
-import { useEffect, useState } from "react";
-import { JIANPEI_PROFILE_KEY, type JianpeiProfile } from "@/lib/agent-report";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { JIANPEI_PROFILE_KEY, AGENT_REPORT_KEY, type JianpeiProfile, type AgentReport } from "@/lib/agent-report";
 import { type ResumeSection, type StructuredResume } from "@/lib/resume-structured";
+import { loadHistory } from "@/lib/history";
 
 const STRUCT_KEY = "jianpei:resume-structured";
 
@@ -18,6 +19,9 @@ export function ResumeWorkbench() {
   const [organizing, setOrganizing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [report, setReport] = useState<AgentReport | null>(null); // 最近一次研判，供「研判版」导出
+  const [template, setTemplate] = useState<"ats-classic" | "apple" | "notion">("ats-classic"); // PDF 模板风格
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null); // 右侧实时预览的 PDF blob URL
 
   useEffect(() => {
     try {
@@ -25,6 +29,10 @@ export function ResumeWorkbench() {
       if (s) setResume(JSON.parse(s) as StructuredResume);
       const p = localStorage.getItem(JIANPEI_PROFILE_KEY);
       if (p) setRawText((JSON.parse(p) as JianpeiProfile).resumeText ?? "");
+      // 最近一次研判：先看本次会话（sessionStorage），再退回本地历史第一条
+      const last = sessionStorage.getItem(AGENT_REPORT_KEY);
+      if (last) setReport(JSON.parse(last) as AgentReport);
+      else setReport(loadHistory()[0]?.report ?? null);
     } catch {
       /* 坏数据当没有 */
     }
@@ -40,6 +48,30 @@ export function ResumeWorkbench() {
     }
   }, [resume]);
 
+  // 右侧实时预览：resume / 模板变化后防抖 700ms，向服务端要一份当前模板的 PDF 显示。
+  useEffect(() => {
+    if (!resume) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/export-resume-template", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: "pdf", template, resume })
+        });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl((old) => {
+          if (old) URL.revokeObjectURL(old);
+          return url;
+        });
+      } catch {
+        /* 预览失败静默，不打扰编辑 */
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [resume, template]);
+
   async function organize() {
     if (!rawText.trim() || organizing) return;
     setOrganizing(true);
@@ -52,7 +84,7 @@ export function ResumeWorkbench() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "整理失败");
-      setResume(data as StructuredResume);
+      setResume((prev) => ({ ...(data as StructuredResume), photo: prev?.photo })); // 重新整理保留已上传的照片
       setNote("整理好了,下面可以逐块改。");
     } catch (e) {
       setNote(e instanceof Error ? e.message : "整理失败,请重试。");
@@ -66,10 +98,10 @@ export function ResumeWorkbench() {
     setBusy(true);
     setNote(null);
     try {
-      const res = await fetch("/api/export-resume", {
+      const res = await fetch("/api/export-resume-template", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume })
+        body: JSON.stringify({ format: "docx", resume })
       });
       if (!res.ok) {
         const d = await res.json();
@@ -85,12 +117,65 @@ export function ResumeWorkbench() {
     }
   }
 
-  function exportPdf() {
-    if (resume) printResume(resume);
+  async function exportPdf() {
+    if (!resume || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch("/api/export-resume-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "pdf", template, resume })
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "导出失败");
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, `${resume.name || "简历"}.pdf`);
+      setNote("已导出 PDF(排版模板)。");
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "导出失败,请重试。");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // ── 嵌套不可变更新 ──
+  async function exportAiPro() {
+    if (!resume || !report || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch("/api/export-resume-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "pdf", template: "ai-pro", resume, report })
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "导出失败");
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, `${resume.name || "简历"}-研判版.pdf`);
+      setNote("已导出研判版 PDF（第 2 页含岗位匹配研判）。");
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "导出失败，请重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
   const patch = (p: Partial<StructuredResume>) => setResume((r) => (r ? { ...r, ...p } : r));
+  async function onPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 允许再次选择同一文件
+    if (!file || !resume) return;
+    try {
+      patch({ photo: await fileToScaledDataUrl(file) });
+    } catch {
+      setNote("照片处理失败，换一张试试。");
+    }
+  }
   const setSec = (si: number, p: Partial<ResumeSection>) =>
     setResume((r) => {
       if (!r) return r;
@@ -114,7 +199,7 @@ export function ResumeWorkbench() {
   if (!loaded) return null;
 
   return (
-    <div className="mx-auto max-w-[820px] px-5 py-8 sm:px-8">
+    <div className="mx-auto max-w-[1180px] px-5 py-8 sm:px-8">
       <header className="mb-5">
         <div className="mb-2 flex items-center gap-2 text-[12px] font-medium tracking-wide text-gf-green">
           <span className="inline-block h-3 w-[5px] rounded-[2px] bg-gf-green" /> 简历修改
@@ -126,7 +211,7 @@ export function ResumeWorkbench() {
       </header>
 
       {!resume ? (
-        <div className="rounded-xl border border-gf-rule bg-gf-surface p-5">
+        <div className="mx-auto max-w-[820px] rounded-xl border border-gf-rule bg-gf-surface p-5">
           {rawText.trim() ? (
             <>
               <p className="mb-3 text-[13px] leading-relaxed text-gf-soft">读到你的简历原文了。点下面,我把它整理成结构化简历(只重组、不改你的事实)。</p>
@@ -145,9 +230,30 @@ export function ResumeWorkbench() {
           )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-8">
+          <div className="space-y-6">
           <section className="rounded-xl border border-gf-rule bg-gf-surface p-4">
             <div className="mb-3 text-[11px] tracking-[0.12em] text-gf-faint">基本信息</div>
+            <div className="mb-3 flex items-center gap-3">
+              {resume.photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={resume.photo} alt="证件照" className="h-[84px] w-[60px] rounded border border-gf-rule object-cover" />
+              ) : (
+                <div className="flex h-[84px] w-[60px] items-center justify-center rounded border border-dashed border-gf-rule text-[11px] text-gf-faint">照片</div>
+              )}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <label className="inline-block cursor-pointer rounded-md border border-gf-rule px-3 py-1.5 text-[12.5px] text-gf-soft transition-colors hover:border-gf-green hover:text-gf-green">
+                    {resume.photo ? "更换照片" : "上传照片"}
+                    <input type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+                  </label>
+                  {resume.photo && (
+                    <button type="button" onClick={() => patch({ photo: undefined })} className="text-[12px] text-gf-faint transition-colors hover:text-gf-seal">移除</button>
+                  )}
+                </div>
+                <p className="text-[11px] leading-relaxed text-gf-faint">证件照，竖版 1-2 寸；仅国内简历用，导出 PDF 时显示在右上角。</p>
+              </div>
+            </div>
             <div className="space-y-2.5">
               <input className={inputCls} value={resume.name} onChange={(e) => patch({ name: e.target.value })} placeholder="姓名" />
               <input className={inputCls} value={resume.headline} onChange={(e) => patch({ headline: e.target.value })} placeholder="一句话定位,如:AI 产品经理 · 半年独立项目转型" />
@@ -195,10 +301,27 @@ export function ResumeWorkbench() {
             <button type="button" onClick={exportWord} disabled={busy} className="rounded-md bg-gf-green px-5 py-2.5 font-serifcn text-[15px] text-white transition-colors hover:bg-gf-greend disabled:opacity-50">
               {busy ? "导出中…" : "导出 Word"}
             </button>
-            <button type="button" onClick={exportPdf} className="rounded-md border border-gf-rule px-4 py-2.5 font-serifcn text-[14px] text-gf-soft transition-colors hover:bg-gf-greentint">导出 PDF</button>
+            <select value={template} onChange={(e) => setTemplate(e.target.value as typeof template)} className="rounded-md border border-gf-rule bg-gf-surface px-2.5 py-2.5 text-[13px] text-gf-ink outline-none transition-colors focus:border-gf-green">
+              <option value="ats-classic">经典</option>
+              <option value="apple">苹果风</option>
+              <option value="notion">Notion 风</option>
+            </select>
+            <button type="button" onClick={exportPdf} disabled={busy} className="rounded-md border border-gf-rule px-4 py-2.5 font-serifcn text-[14px] text-gf-soft transition-colors hover:bg-gf-greentint disabled:opacity-50">导出 PDF</button>
+            {report && (
+              <button type="button" onClick={exportAiPro} disabled={busy} className="rounded-md border border-gf-green px-4 py-2.5 font-serifcn text-[14px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50">导出研判版 PDF</button>
+            )}
             <button type="button" onClick={organize} disabled={organizing} className="text-[12.5px] text-gf-faint transition-colors hover:text-gf-soft disabled:opacity-50">{organizing ? "重新整理中…" : "从原文重新整理"}</button>
             {note && <span className="text-[12.5px] text-gf-soft">{note}</span>}
           </div>
+          </div>
+          <aside className="mt-6 hidden lg:mt-0 lg:block lg:sticky lg:top-8">
+            <div className="mb-2 text-[11px] tracking-[0.12em] text-gf-faint">实时预览（当前模板）</div>
+            {previewUrl ? (
+              <iframe title="简历预览" src={previewUrl} className="h-[600px] w-full rounded-lg border border-gf-rule bg-white" />
+            ) : (
+              <div className="flex h-[600px] w-full items-center justify-center rounded-lg border border-dashed border-gf-rule text-[12.5px] text-gf-faint">预览生成中…</div>
+            )}
+          </aside>
         </div>
       )}
     </div>
@@ -216,65 +339,28 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// 结构化简历 → 专业排版 A4 → 打印(另存为 PDF)。
-function printResume(resume: StructuredResume): void {
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const body =
-    `<h1>${esc(resume.name || "姓名")}</h1>` +
-    (resume.headline.trim() ? `<p class="hl">${esc(resume.headline)}</p>` : "") +
-    (resume.contacts.length ? `<p class="ct">${resume.contacts.filter((c) => c.trim()).map(esc).join("　·　")}</p>` : "") +
-    resume.sections
-      .map(
-        (sec) =>
-          `<h2>${esc(sec.title)}</h2>` +
-          sec.entries
-            .map(
-              (e) =>
-                (e.heading.trim() || e.meta.trim()
-                  ? `<div class="eh"><span class="ehn">${esc(e.heading)}</span><span class="ehm">${esc(e.meta)}</span></div>`
-                  : "") +
-                e.bullets
-                  .filter((b) => b.trim())
-                  .map((b) => `<div class="bl">${esc(b)}</div>`)
-                  .join("")
-            )
-            .join("")
-      )
-      .join("");
-
-  const css =
-    "@page{size:A4;margin:15mm 16mm}html,body{margin:0;padding:0}" +
-    'body{font-family:"宋体",SimSun,"Songti SC",serif;color:#23271f;font-size:10.5pt;line-height:1.6}' +
-    "h1{font-size:19pt;font-weight:700;text-align:center;margin:0 0 3pt}" +
-    ".hl{text-align:center;color:#5e5641;font-size:11pt;margin:0 0 3pt}" +
-    ".ct{text-align:center;color:#5e5641;font-size:9.5pt;margin:0 0 14pt}" +
-    "h2{font-size:12.5pt;font-weight:700;border-bottom:1px solid #52724b;padding-bottom:3pt;margin:15pt 0 7pt}" +
-    ".eh{display:flex;justify-content:space-between;align-items:baseline;margin:7pt 0 3pt}" +
-    ".ehn{font-weight:700}.ehm{color:#8a7e64;font-size:9.5pt}" +
-    ".bl{margin:0 0 4pt;padding-left:1.1em;text-indent:-1.1em}.bl::before{content:'· '}";
-
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-  document.body.appendChild(iframe);
-  const doc = iframe.contentWindow?.document;
-  if (!doc) {
-    iframe.remove();
-    return;
-  }
-  doc.open();
-  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(resume.name || "简历")}</title><style>${css}</style></head><body>${body}</body></html>`);
-  doc.close();
-  const win = iframe.contentWindow;
-  if (!win) {
-    iframe.remove();
-    return;
-  }
-  const cleanup = () => setTimeout(() => iframe.remove(), 800);
-  win.onafterprint = cleanup;
-  setTimeout(() => {
-    win.focus();
-    win.print();
-  }, 250);
-  setTimeout(cleanup, 60000);
+// 把上传的图片压到证件照尺寸（限宽 420px，转 jpeg）。避免大图撑爆 localStorage、也让 PDF 不臃肿。
+async function fileToScaledDataUrl(file: File, maxW = 420): Promise<string> {
+  const raw = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(new Error("读图失败"));
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new window.Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("解码失败"));
+    i.src = raw;
+  });
+  const scale = Math.min(1, maxW / img.width);
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return raw;
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", 0.85);
 }

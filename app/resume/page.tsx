@@ -8,7 +8,7 @@ import { ResumeWorkbench } from "@/components/ResumeWorkbench";
 
 export default function ResumePage() {
   return (
-    <AppShell brand={<span className="truncate text-[13.5px] text-gf-soft">简历修改</span>} nav={<AppNav />}>
+    <AppShell tone="bg-[#f7f1e3]" brand={<span className="truncate text-[13.5px] text-gf-soft">简历修改</span>} nav={<AppNav />}>
       <ResumeWorkbench />
     </AppShell>
   );

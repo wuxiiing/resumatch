@@ -31,6 +31,17 @@ export function saveToHistory(report: AgentReport): void {
   }
 }
 
+// 删除一条历史,返回删除后的列表(给组件直接 setState 用)。
+export function removeFromHistory(id: string): HistoryItem[] {
+  try {
+    const list = loadHistory().filter((it) => it.id !== id);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+    return list;
+  } catch {
+    return loadHistory();
+  }
+}
+
 // 点历史项：把那次研判塞回 sessionStorage，跳到研判页重看。
 export function openHistoryItem(item: HistoryItem): void {
   try {
