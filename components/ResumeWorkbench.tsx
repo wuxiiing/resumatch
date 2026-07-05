@@ -3,12 +3,12 @@
 // 简配 2.0 · 简历修改（重做版）。纯文本 → 一键智能整理成结构化 → 逐块编辑 → 专业模板导出。
 // 结构化简历存 localStorage(jianpei:resume-structured);原始纯文本来自档案(jianpei:profile)。
 
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { JIANPEI_PROFILE_KEY, AGENT_REPORT_KEY, type JianpeiProfile, type AgentReport } from "@/lib/agent-report";
 import { type ResumeSection, type StructuredResume } from "@/lib/resume-structured";
-import { loadHistory } from "@/lib/history";
+import { loadHistory, historyIdOf } from "@/lib/history";
 
-const STRUCT_KEY = "jianpei:resume-structured";
+const STRUCT_BASE = "jianpei:resume-structured"; // 全局兜底键；每次分析在其后接 :<id>，各自独立
 
 const inputCls = "w-full rounded-md border border-gf-rule bg-gf-surface px-3 py-2 text-[13.5px] text-gf-ink outline-none transition-colors focus:border-gf-green";
 
@@ -22,17 +22,26 @@ export function ResumeWorkbench() {
   const [report, setReport] = useState<AgentReport | null>(null); // 最近一次研判，供「研判版」导出
   const [template, setTemplate] = useState<"ats-classic" | "apple" | "notion">("ats-classic"); // PDF 模板风格
   const [previewUrl, setPreviewUrl] = useState<string | null>(null); // 右侧实时预览的 PDF blob URL
+  const structKeyRef = useRef(STRUCT_BASE); // 当前简历存哪个键（绑定这次研判），挂载时定
 
   useEffect(() => {
     try {
-      const s = localStorage.getItem(STRUCT_KEY);
-      if (s) setResume(JSON.parse(s) as StructuredResume);
-      const p = localStorage.getItem(JIANPEI_PROFILE_KEY);
-      if (p) setRawText((JSON.parse(p) as JianpeiProfile).resumeText ?? "");
-      // 最近一次研判：先看本次会话（sessionStorage），再退回本地历史第一条
+      const history = loadHistory();
+      // 认出当前绑定的研判：优先本次会话查看的报告，退回历史第一条。
       const last = sessionStorage.getItem(AGENT_REPORT_KEY);
-      if (last) setReport(JSON.parse(last) as AgentReport);
-      else setReport(loadHistory()[0]?.report ?? null);
+      const activeReport = last ? (JSON.parse(last) as AgentReport) : history[0]?.report ?? null;
+      setReport(activeReport);
+      const id = activeReport ? historyIdOf(activeReport) : null;
+      // 每次分析一份结构化简历：键 = STRUCT_BASE:<id>（无绑定则全局兜底键）。
+      const key = id ? `${STRUCT_BASE}:${id}` : STRUCT_BASE;
+      structKeyRef.current = key;
+      const s = localStorage.getItem(key);
+      if (s) setResume(JSON.parse(s) as StructuredResume);
+      // 原文种子：优先这次分析的简历快照，退回全局档案。
+      const snapshot = id ? history.find((it) => it.id === id)?.resumeText ?? "" : "";
+      const p = localStorage.getItem(JIANPEI_PROFILE_KEY);
+      const profileRaw = p ? (JSON.parse(p) as JianpeiProfile).resumeText ?? "" : "";
+      setRawText(snapshot || profileRaw);
     } catch {
       /* 坏数据当没有 */
     }
@@ -42,7 +51,7 @@ export function ResumeWorkbench() {
   useEffect(() => {
     if (!resume) return;
     try {
-      localStorage.setItem(STRUCT_KEY, JSON.stringify(resume));
+      localStorage.setItem(structKeyRef.current, JSON.stringify(resume));
     } catch {
       /* 存不下不影响 */
     }
@@ -201,6 +210,22 @@ export function ResumeWorkbench() {
   return (
     <div className="mx-auto max-w-[1180px] px-5 py-8 sm:px-8">
       <header className="mb-5">
+        {report && (
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                sessionStorage.setItem(AGENT_REPORT_KEY, JSON.stringify(report));
+              } catch {
+                /* 存不下也照跳 */
+              }
+              window.location.href = "/agent-result";
+            }}
+            className="mb-2.5 inline-flex items-center gap-1.5 text-[12.5px] text-gf-faint transition-colors hover:text-gf-greend"
+          >
+            <span className="text-[15px] leading-none">←</span> 返回研判
+          </button>
+        )}
         <div className="mb-2 flex items-center gap-2 text-[12px] font-medium tracking-wide text-gf-green">
           <span className="inline-block h-3 w-[5px] rounded-[2px] bg-gf-green" /> 简历修改
         </div>
