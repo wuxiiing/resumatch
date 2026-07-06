@@ -102,6 +102,25 @@ function rebuildPageText(items: PdfTextItem[]): string {
 }
 
 export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
+  // Vercel Lambda 没有浏览器 DOM API。pdfjs-dist 初始化时需要 DOMMatrix/ImageData/Path2D，
+  // 但我们只做文本提取（getTextContent）不做渲染——这些构造函数永远不会被真正调用，
+  // 只需要占位让 pdfjs-dist 不崩即可。
+  if (typeof globalThis.DOMMatrix === "undefined") {
+    (globalThis as Record<string, unknown>).DOMMatrix = class DOMMatrix {
+      a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+    };
+  }
+  if (typeof globalThis.ImageData === "undefined") {
+    (globalThis as Record<string, unknown>).ImageData = class ImageData {
+      data = new Uint8ClampedArray();
+      width = 0;
+      height = 0;
+    };
+  }
+  if (typeof globalThis.Path2D === "undefined") {
+    (globalThis as Record<string, unknown>).Path2D = class Path2D {};
+  }
+
   const { getDocument } = await import(
     "pdfjs-dist/legacy/build/pdf.mjs"
   );
