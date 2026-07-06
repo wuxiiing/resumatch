@@ -57,7 +57,7 @@ async function callOnce(
   if (!rawContent) throw new Error(`豆包视觉返回内容为空（choices=${JSON.stringify(data.choices?.length)}）`);
   try {
     return JSON.parse(extractJson(rawContent));
-  } catch (e) {
+  } catch {
     throw new Error(`豆包视觉 JSON 解析失败：${rawContent.slice(0, 200)}`);
   }
 }

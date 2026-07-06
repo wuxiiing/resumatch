@@ -16,7 +16,10 @@ const eslintConfig = [
       "node_modules/**",
       "next-env.d.ts",
       "postcss.config.mjs",
-      "tailwind.config.ts"
+      "tailwind.config.ts",
+      "learning-1.5/**",
+      "public/pdfjs/**",
+      "_archive/**"
     ]
   },
   ...compat.extends("next/core-web-vitals", "next/typescript")

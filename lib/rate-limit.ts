@@ -195,9 +195,7 @@ export function consumeCredits(
     }
   }
 
-  // 4. 全站熔断
-  const sr = getActionLimiter(action).check(`__site__`, SITE_LIMITS[action]); // 不实际消耗全站配额（已在操作计数里统计）
-  // 简化：全站熔断由各 limiter 的 site 上限自动处理
+  // 4. 全站熔断由各 limiter 的 site 上限自动处理（check 时已累计 siteCount）
 
   const used = creditLimiter.peek(ip);
   return { ok: true, dayKey: getBeijingDayKey(new Date()), ipCount: used, siteCount: 0, creditsLeft: DAILY_CREDITS - used };
