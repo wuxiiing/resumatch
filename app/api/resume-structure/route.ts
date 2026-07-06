@@ -8,7 +8,7 @@ import { RESUME_STRUCTURE_SYSTEM, buildStructureUserPrompt, validateStructuredRe
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export const POST = apiPost({ bucket: "resume", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
+export const POST = apiPost({ credit: "structure", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
   const resumeText = String(body.resumeText ?? "").trim();
   if (!resumeText) throw new Error("缺少简历内容。");
 

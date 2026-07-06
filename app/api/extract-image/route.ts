@@ -3,7 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { extractIntakeImage } from "@/lib/agents/vision-intake.ts";
-import { consumeAgentLimit } from "@/lib/rate-limit";
+import { consumeCredits } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "缺少图片(需 data:image/* 的 base64 data URL)。" }, { status: 400 });
   }
 
-  const rl = consumeAgentLimit("resume", request.headers);
+  const rl = consumeCredits("image", request.headers);
   if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
   try {

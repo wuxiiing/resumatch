@@ -90,13 +90,13 @@ export default function CareerPage() {
       const res = await fetch("/api/career-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]),
         body: JSON.stringify({
           resumeText: profile!.resumeText,
           targetDirection: profile!.intent?.targetDirection ?? "",
           hardNo: profile!.intent?.hardNo ?? [],
           messages: priorMsgs
         }),
-        signal: controller.signal
       });
       const data = await res.json();
       if (!mountedRef.current) return;
@@ -138,7 +138,7 @@ export default function CareerPage() {
           hardNo: profile.intent?.hardNo ?? [],
           messages: next
         }),
-        signal: controller.signal
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)])
       });
       const data = await res.json();
       if (!mountedRef.current) return;
@@ -167,6 +167,7 @@ export default function CareerPage() {
       const res = await fetch("/api/career-path", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(120_000),
         body: JSON.stringify({
           resumeText: profile.resumeText,
           targetDirection: profile.intent?.targetDirection?.trim() || undefined

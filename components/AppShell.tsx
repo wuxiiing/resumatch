@@ -5,6 +5,7 @@
 // 桌面:左右栏内联收放(width 过渡);移动:抽屉(translateX)。两侧都能收。
 
 import { useState, type ReactNode } from "react";
+import { CreditBar } from "./CreditBar";
 
 function IconMenu() {
   return (
@@ -74,7 +75,9 @@ export function AppShell({
             </button>
             <div className="min-w-0 truncate">{brand}</div>
           </div>
-          {aside && (
+          <div className="relative flex items-center gap-2">
+            <CreditBar />
+              {aside && (
             <>
               <button
                 type="button"
@@ -94,6 +97,7 @@ export function AppShell({
               </button>
             </>
           )}
+          </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>

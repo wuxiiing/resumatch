@@ -6,7 +6,7 @@ import { AGENT_REPORT_KEY, JIANPEI_PROFILE_KEY, type AgentReport, type JianpeiPr
 export type HistoryItem = { id: string; label: string; date: string; createdAt: number; resumeText: string; customLabel?: string; report: AgentReport };
 
 const HISTORY_KEY = "jianpei:history";
-const MAX = 20;
+const MAX = 50;
 
 export function loadHistory(): HistoryItem[] {
   try {

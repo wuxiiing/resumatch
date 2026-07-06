@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { consumeAgentLimit } from "@/lib/rate-limit";
+import { consumeCredits } from "@/lib/rate-limit";
 import { parseDocxResume } from "@/lib/parse-docx";
 import { parsePdfResume } from "@/lib/parse-pdf";
 import { parseTxtResume } from "@/lib/parse-txt";
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const rl = consumeAgentLimit("resume", request.headers);
+    const rl = consumeCredits("parse", request.headers);
     if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
     const parsedResume = await (async () => {

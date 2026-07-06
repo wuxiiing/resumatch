@@ -14,7 +14,7 @@ import { NotionDocument } from "@/lib/pdf/templates/notion.ts";
 import { resumeToDocxBuffer } from "@/lib/resume-docx.ts";
 import { validateStructuredResume, type StructuredResume } from "@/lib/resume-structured.ts";
 import type { AgentReport } from "@/lib/agent-report.ts";
-import { consumeAgentLimit } from "@/lib/rate-limit.ts";
+import { consumeCredits } from "@/lib/rate-limit.ts";
 
 export const runtime = "nodejs";
 
@@ -205,7 +205,7 @@ export async function POST(request: Request): Promise<Response> {
   // 只有真正下载（download:true）才计入限额；实时预览不带该标记、不限，
   // 否则编辑区防抖预览几下就把 5 次/天额度打光。复用既有 "edit"（简历导出）bucket。
   if (payload.download === true) {
-    const rl = consumeAgentLimit("edit", request.headers);
+    const rl = consumeCredits("export", request.headers);
     if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
   }
 

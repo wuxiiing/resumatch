@@ -25,7 +25,7 @@ function clip(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…(略)" : s;
 }
 
-export const POST = apiPost({ bucket: "career", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
+export const POST = apiPost({ credit: "chat", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
   const history = Array.isArray(body.messages)
     ? (body.messages as ChatMsg[]).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     : [];

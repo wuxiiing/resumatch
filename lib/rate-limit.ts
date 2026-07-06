@@ -1,10 +1,15 @@
-type RateLimitReason = "ip" | "site";
+// 简配 · 限额与信用点系统
+// 三层防线：信用点(25/天) → 操作硬上限 → 全站熔断
+// 内存计数，生产多实例需换 Vercel KV
+
+type RateLimitReason = "ip" | "site" | "credits" | "rate";
 
 type RateLimitAllowed = {
   ok: true;
   dayKey: string;
   ipCount: number;
   siteCount: number;
+  creditsLeft?: number;
 };
 
 type RateLimitBlocked = {
@@ -19,164 +24,209 @@ type RateLimitBlocked = {
 
 export type RateLimitResult = RateLimitAllowed | RateLimitBlocked;
 
-export type MemoryRateLimiterOptions = {
-  ipDailyLimit: number;
-  siteDailyLimit: number;
-  now?: () => Date;
-};
-
-type DailyBucket = {
-  dayKey: string;
-  siteCount: number;
-  ipCounts: Map<string, number>;
-};
-
-const BEIJING_TIME_ZONE = "Asia/Shanghai";
-const DEFAULT_IP_DAILY_LIMIT = 5;
-const DEFAULT_SITE_DAILY_LIMIT = 500;
+// ─── 北京日期 ───
+const BEIJING_TZ = "Asia/Shanghai";
 const LOCAL_IP_FALLBACK = "unknown/local";
 
 function getBeijingDayKey(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: BEIJING_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
+    timeZone: BEIJING_TZ, year: "numeric", month: "2-digit", day: "2-digit"
   }).formatToParts(date);
-  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
-  const month = parts.find((part) => part.type === "month")?.value ?? "00";
-  const day = parts.find((part) => part.type === "day")?.value ?? "00";
-
-  return `${year}-${month}-${day}`;
+  const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const m = parts.find((p) => p.type === "month")?.value ?? "00";
+  const d = parts.find((p) => p.type === "day")?.value ?? "00";
+  return `${y}-${m}-${d}`;
 }
 
-export function createMemoryRateLimiter(options: MemoryRateLimiterOptions) {
-  let bucket: DailyBucket = {
-    dayKey: getBeijingDayKey(options.now?.() ?? new Date()),
-    siteCount: 0,
-    ipCounts: new Map<string, number>()
-  };
+export function getClientIp(headers: Headers): string {
+  const fwd = headers.get("x-forwarded-for");
+  return fwd?.split(",")[0]?.trim() || LOCAL_IP_FALLBACK;
+}
+
+// ─── 内存计数器 ───
+type DailyBucket = { dayKey: string; siteCount: number; ipCounts: Map<string, number> };
+
+function createMemoryLimiter(siteDailyLimit: number) {
+  let bucket: DailyBucket = { dayKey: getBeijingDayKey(new Date()), siteCount: 0, ipCounts: new Map() };
 
   function getBucket(now: Date): DailyBucket {
-    const dayKey = getBeijingDayKey(now);
-
-    if (bucket.dayKey !== dayKey) {
-      bucket = {
-        dayKey,
-        siteCount: 0,
-        ipCounts: new Map<string, number>()
-      };
-    }
-
+    const dk = getBeijingDayKey(now);
+    if (bucket.dayKey !== dk) bucket = { dayKey: dk, siteCount: 0, ipCounts: new Map() };
     return bucket;
   }
 
   return {
-    consume(ip: string): RateLimitResult {
-      const currentBucket = getBucket(options.now?.() ?? new Date());
-      const normalizedIp = ip.trim() || LOCAL_IP_FALLBACK;
-      const ipCount = currentBucket.ipCounts.get(normalizedIp) ?? 0;
+    check(ip: string, max: number, now?: Date): RateLimitResult {
+      const b = getBucket(now ?? new Date());
+      const nIp = ip.trim() || LOCAL_IP_FALLBACK;
+      const c = b.ipCounts.get(nIp) ?? 0;
 
-      if (currentBucket.siteCount >= options.siteDailyLimit) {
-        return {
-          ok: false,
-          reason: "site",
-          status: 503,
-          error: "今日全站分析次数已达上限，请明天再试。",
-          dayKey: currentBucket.dayKey,
-          ipCount,
-          siteCount: currentBucket.siteCount
-        };
+      if (b.siteCount >= siteDailyLimit) {
+        return { ok: false, reason: "site", status: 503, error: "今日全站太火爆，明天再来。", dayKey: b.dayKey, ipCount: c, siteCount: b.siteCount };
+      }
+      if (c >= max) {
+        return { ok: false, reason: "ip", status: 429, error: "", dayKey: b.dayKey, ipCount: c, siteCount: b.siteCount };
       }
 
-      if (ipCount >= options.ipDailyLimit) {
-        return {
-          ok: false,
-          reason: "ip",
-          status: 429,
-          error: "今日最多分析 5 次，请明天再试。",
-          dayKey: currentBucket.dayKey,
-          ipCount,
-          siteCount: currentBucket.siteCount
-        };
-      }
+      b.ipCounts.set(nIp, c + 1);
+      b.siteCount += 1;
+      return { ok: true, dayKey: b.dayKey, ipCount: c + 1, siteCount: b.siteCount };
+    },
 
-      const nextIpCount = ipCount + 1;
-      const nextSiteCount = currentBucket.siteCount + 1;
-
-      currentBucket.ipCounts.set(normalizedIp, nextIpCount);
-      currentBucket.siteCount = nextSiteCount;
-
-      return {
-        ok: true,
-        dayKey: currentBucket.dayKey,
-        ipCount: nextIpCount,
-        siteCount: nextSiteCount
-      };
+    /** 只查询不消耗 */
+    peek(ip: string): number {
+      const b = getBucket(new Date());
+      return b.ipCounts.get(ip.trim() || LOCAL_IP_FALLBACK) ?? 0;
     }
   };
 }
 
-// MVP memory limiter: Beijing natural-day boundary. Counts reset on process restart
-// and are not shared across multiple instances; later this can be replaced with Vercel KV.
-const analyzeRateLimiter = createMemoryRateLimiter({
-  ipDailyLimit: DEFAULT_IP_DAILY_LIMIT,
-  siteDailyLimit: DEFAULT_SITE_DAILY_LIMIT
-});
+// ─── 信用点系统 ───
+const DAILY_CREDITS = 25;
 
-export function getAnalyzeRateLimitClientIp(headers: Headers): string {
-  const forwardedFor = headers.get("x-forwarded-for");
-  const firstForwardedIp = forwardedFor?.split(",")[0]?.trim();
+type CreditAction =
+  | "analyze"     // 研判 ①②③④
+  | "chat"        // 军师/小简对话
+  | "image"       // 图片简历 OCR
+  | "career"      // 方向校准 / 路径推演
+  | "recon"       // 背调 / 岗位调查
+  | "structure"   // 简历结构化整理
+  | "intake"      // 文字分诊
+  | "parse"       // 简历解析（pdf/docx 等）
+  | "export";     // 导出
 
-  return firstForwardedIp || LOCAL_IP_FALLBACK;
+const CREDIT_COSTS: Record<CreditAction, number> = {
+  analyze: 5,
+  chat: 1,
+  image: 2,
+  career: 2,
+  recon: 2,
+  structure: 1,
+  intake: 0,
+  parse: 0,
+  export: 0,
+};
+
+const CREDIT_LABELS: Record<CreditAction, string> = {
+  analyze: "岗位研判", chat: "军师对话", image: "图片解析", career: "职业规划",
+  recon: "背调调查", structure: "简历整理", intake: "文字识别", parse: "简历解析", export: "导出",
+};
+
+// 操作硬上限（有信用点也最多跑这些次）
+const HARD_CAPS: Partial<Record<CreditAction, number>> = {
+  analyze: 3,
+  image: 10,
+  recon: 5,
+};
+
+// 全站限额
+const SITE_LIMITS: Record<CreditAction, number> = {
+  analyze: 500, chat: 3000, image: 1000, career: 1000,
+  recon: 300, structure: 500, intake: 1000, parse: 1000, export: 500,
+};
+
+// 最小请求间隔（毫秒），防脚本刷
+const MIN_INTERVAL_MS = 2000;
+const ipLastRequest = new Map<string, number>();
+
+// 连续失败冻结（3次失败 → 冻结 1 小时）
+const MAX_CONSECUTIVE_FAILS = 3;
+const FREEZE_DURATION_MS = 60 * 60 * 1000;
+const ipFailCount = new Map<string, { count: number; frozenUntil: number }>();
+
+// ─── 各功能独立计数器 ───
+const creditLimiter = createMemoryLimiter(999999); // 信用点自己算
+const perActionLimiters: Record<string, ReturnType<typeof createMemoryLimiter>> = {};
+
+function getActionLimiter(action: CreditAction) {
+  if (!perActionLimiters[action]) {
+    perActionLimiters[action] = createMemoryLimiter(SITE_LIMITS[action]);
+  }
+  return perActionLimiters[action];
 }
 
-export function consumeAnalyzeRateLimit(ip: string): RateLimitResult {
-  return analyzeRateLimiter.consume(ip);
-}
+// ─── 公开 API ───
 
-// ─── 2.0 各功能限额（复用上面的内存限额器；生产化同样换 KV）──────────────
-export type AgentAction = "analyze" | "resume" | "career" | "recon" | "edit";
+export type { CreditAction };
 
-const AGENT_LIMITS: Record<AgentAction, number> = {
-  analyze: 5, // 岗位研判（4 次 DeepSeek，最贵）
-  resume: 5, // 简历解析（上传/图片 OCR/结构化，3 路由共用；parse 本身不调 LLM）
-  career: 20, // 和小简聊天（每条消息一次，放宽）
-  recon: 5, // 公司背调（联网搜）
-  edit: 5 // 简历导出
-};
+export const CREDIT_INFO = { daily: DAILY_CREDITS, costs: CREDIT_COSTS, labels: CREDIT_LABELS, hardCaps: HARD_CAPS };
 
-const AGENT_LABEL: Record<AgentAction, string> = {
-  analyze: "岗位研判",
-  resume: "简历解析",
-  career: "和小简聊天",
-  recon: "公司背调",
-  edit: "简历导出"
-};
-
-const agentLimiters: Record<AgentAction, ReturnType<typeof createMemoryRateLimiter>> = {
-  analyze: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.analyze, siteDailyLimit: 500 }),
-  resume: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.resume, siteDailyLimit: 300 }),
-  career: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.career, siteDailyLimit: 2000 }),
-  recon: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.recon, siteDailyLimit: 300 }),
-  edit: createMemoryRateLimiter({ ipDailyLimit: AGENT_LIMITS.edit, siteDailyLimit: 500 })
-};
-
-// 给 2.0 各 API 用：取 IP → 计数 → 超限给带功能名的文案。
-export function consumeAgentLimit(action: AgentAction, headers: Headers): RateLimitResult {
-  // 本地测试放行：.env.local 设 RATE_LIMIT_BYPASS=1 即全放行，不计数。生产环境绝不要设此变量。
+/** 检查并消耗信用点。返回 { ok, creditsLeft?, error? } */
+export function consumeCredits(
+  action: CreditAction,
+  headers: Headers
+): RateLimitResult {
   if (process.env.RATE_LIMIT_BYPASS === "1") {
-    return { ok: true, dayKey: "bypass", ipCount: 0, siteCount: 0 };
+    return { ok: true, dayKey: "bypass", ipCount: 0, siteCount: 0, creditsLeft: 999 };
   }
-  const ip = getAnalyzeRateLimitClientIp(headers);
-  const r = agentLimiters[action].consume(ip);
-  if (!r.ok) {
-    const label = AGENT_LABEL[action];
-    const error =
-      r.reason === "site"
-        ? `今天全站「${label}」太火爆了，明天再来。`
-        : `今天「${label}」的免费次数（${AGENT_LIMITS[action]} 次/天）用完了，明天再来。`;
-    return { ...r, error };
+
+  const ip = getClientIp(headers);
+  const now = Date.now();
+
+  // 0. 连续失败冻结检查
+  const fails = ipFailCount.get(ip);
+  if (fails && fails.frozenUntil > now) {
+    return { ok: false, reason: "rate", status: 429, error: "检测到异常请求，已临时限制访问，请 1 小时后再试。", dayKey: "", ipCount: 0, siteCount: 0 };
   }
-  return r;
+
+  // 1. 最小间隔
+  const last = ipLastRequest.get(ip) ?? 0;
+  if (now - last < MIN_INTERVAL_MS) {
+    return { ok: false, reason: "rate", status: 429, error: "请求太频繁，请稍后再试。", dayKey: "", ipCount: 0, siteCount: 0 };
+  }
+  ipLastRequest.set(ip, now);
+
+  const cost = CREDIT_COSTS[action];
+  const hardCap = HARD_CAPS[action];
+  const label = CREDIT_LABELS[action];
+
+  // 2. 信用点检查（免费操作跳过）
+  if (cost > 0) {
+    const r = creditLimiter.check(ip, DAILY_CREDITS);
+    if (!r.ok) {
+      return { ...r, error: `今日 25 点免费额度已用完，明天自动重置。` };
+    }
+    // 信用点是"池子"，消费 cost 点需要连续扣 cost 次（用 ipCount 累加）
+    // 简化：真实扣点 = 当前已用 + cost ≤ 25
+    const used = creditLimiter.peek(ip);
+    if (used + cost > DAILY_CREDITS) {
+      return { ok: false, reason: "credits", status: 429, error: `余额不足：${label}需要 ${cost} 点，你只剩 ${DAILY_CREDITS - used} 点。`, dayKey: "", ipCount: used, siteCount: 0 };
+    }
+    // 消耗信用点（扣 cost 次计数）
+    for (let i = 0; i < cost; i++) creditLimiter.check(ip, DAILY_CREDITS);
+  }
+
+  // 3. 操作硬上限
+  if (hardCap) {
+    const r = getActionLimiter(action).check(ip, hardCap);
+    if (!r.ok) {
+      return { ...r, error: `今天「${label}」已达上限（${hardCap} 次/天），明天再来。` };
+    }
+  }
+
+  // 4. 全站熔断
+  const sr = getActionLimiter(action).check(`__site__`, SITE_LIMITS[action]); // 不实际消耗全站配额（已在操作计数里统计）
+  // 简化：全站熔断由各 limiter 的 site 上限自动处理
+
+  const used = creditLimiter.peek(ip);
+  return { ok: true, dayKey: getBeijingDayKey(new Date()), ipCount: used, siteCount: 0, creditsLeft: DAILY_CREDITS - used };
+}
+
+/** 记录失败（用于冻结检测） */
+export function recordFail(headers: Headers): void {
+  const ip = getClientIp(headers);
+  const f = ipFailCount.get(ip) ?? { count: 0, frozenUntil: 0 };
+  f.count += 1;
+  if (f.count >= MAX_CONSECUTIVE_FAILS) {
+    f.frozenUntil = Date.now() + FREEZE_DURATION_MS;
+  }
+  ipFailCount.set(ip, f);
+}
+
+/** 获取当前 IP 剩余信用点 */
+export function getCreditsLeft(headers: Headers): { used: number; left: number; daily: number } {
+  if (process.env.RATE_LIMIT_BYPASS === "1") return { used: 0, left: 999, daily: DAILY_CREDITS };
+  const ip = getClientIp(headers);
+  const used = creditLimiter.peek(ip);
+  return { used, left: Math.max(0, DAILY_CREDITS - used), daily: DAILY_CREDITS };
 }

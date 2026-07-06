@@ -7,7 +7,7 @@ import { classifyIntakeText } from "@/lib/agents/intake.ts";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export const POST = apiPost({ bucket: "career", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
+export const POST = apiPost({ credit: "intake", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
   const text = String(body.text ?? "").trim();
   if (!text) throw new Error("缺少文字内容。");
   return classifyIntakeText(text);

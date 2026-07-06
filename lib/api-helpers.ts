@@ -1,39 +1,23 @@
-// API route 样板 helper：抽掉各 /api/* route 里 15-20 行的重复 boilerplate。
-// 只覆盖最常见的 JSON POST 模式（parse body → 限流 → env key → handler → catch）；
-// 文件上传、Tavily 多步管道、MVP 老路由保持原样。
+// API route 样板 helper：JSON POST 模式（parse body → 信用点 → env key → handler → 日志）。
+// 文件上传、Tavily 多步管道路由自行处理限流。
 
 import { NextResponse } from "next/server";
-import { consumeAgentLimit, type AgentAction } from "./rate-limit";
+import { consumeCredits, recordFail, type CreditAction } from "./rate-limit";
 import { log } from "./logger";
 
 export interface ApiPostOpts {
-  /** rate-limit bucket; omit to skip rate limiting */
-  bucket?: AgentAction;
-  /** single env var that must be set (most common: "DEEPSEEK_API_KEY") */
+  /** 信用点操作类型（决定扣多少点 + 硬上限） */
+  credit?: CreditAction;
+  /** single env var that must be set */
   requireKey?: string;
-  /** route label for logging (auto-derived from request URL if omitted) */
+  /** route label for logging (auto-derived from URL if omitted) */
   route?: string;
 }
 
-/** 从 Request URL 中提取 /api/xxx 路径 */
 function apiPath(req: Request): string {
-  try {
-    return new URL(req.url).pathname;
-  } catch {
-    return "/api/unknown";
-  }
+  try { return new URL(req.url).pathname; } catch { return "/api/unknown"; }
 }
 
-/**
- * 包裹一个 JSON POST handler，自动处理：
- *   1. JSON body 解析（解析失败 → 400）
- *   2. 限额检查（bucket 非空时；超额 → 429）
- *   3. 环境变量检查（requireKey 非空时；缺失 → 500）
- *   4. handler 异常 → 500
- *   5. 自动记录请求日志（入参大小 + 耗时 + 状态码 + 错误）
- *
- * handler 返回值直接传给 NextResponse.json()。
- */
 export function apiPost(
   opts: ApiPostOpts,
   handler: (body: Record<string, unknown>, req: Request) => Promise<unknown>
@@ -53,12 +37,13 @@ export function apiPost(
       return NextResponse.json({ error: "请求体必须是合法 JSON。" }, { status: 400 });
     }
 
-    // 2. Rate limit
-    if (opts.bucket) {
-      const rl = consumeAgentLimit(opts.bucket, req.headers);
-      if (!rl.ok) {
-        log.warn(route, "rate limited", { status: 429 });
-        return NextResponse.json({ error: rl.error }, { status: rl.status });
+    // 2. 信用点 + 防刷
+    if (opts.credit) {
+      const r = consumeCredits(opts.credit, req.headers);
+      if (!r.ok) {
+        log.warn(route, `blocked: ${r.reason}`, { status: r.status });
+        if (r.reason === "rate") recordFail(req.headers);
+        return NextResponse.json({ error: r.error }, { status: r.status });
       }
     }
 
@@ -74,9 +59,10 @@ export function apiPost(
       log.info(route, "ok", { duration: Date.now() - t0, status: 200 });
       return NextResponse.json(result);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "处理失败，请重试。";
-      log.error(route, message, e, { duration: Date.now() - t0, status: 500 });
-      return NextResponse.json({ error: message }, { status: 500 });
+      const msg = e instanceof Error ? e.message : "处理失败，请重试。";
+      log.error(route, msg, e, { duration: Date.now() - t0, status: 500 });
+      recordFail(req.headers);
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
   };
 }

@@ -7,7 +7,7 @@ import { careerFitNode } from "@/lib/agents/career-fit/node.ts";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export const POST = apiPost({ bucket: "career", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
+export const POST = apiPost({ credit: "career", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
   const resumeText = String(body.resumeText ?? "").trim();
   if (!resumeText) throw new Error("缺少简历文本。");
 

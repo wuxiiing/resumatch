@@ -2,7 +2,7 @@
 // 复用背调骨架,只换搜索焦点(招聘帖发布/重复)+ 判断口径。按需触发,走 recon 限流桶。不动旧 MVP。
 
 import { NextResponse } from "next/server";
-import { consumeAgentLimit } from "@/lib/rate-limit";
+import { consumeCredits } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "缺少公司名,无法调查岗位。" }, { status: 400 });
   }
 
-  const rl = consumeAgentLimit("recon", req.headers);
+  const rl = consumeCredits("recon", req.headers);
   if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
   const tavilyKey = process.env.TAVILY_API_KEY;

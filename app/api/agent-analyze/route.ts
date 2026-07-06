@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 // 工作流串行调 4 次 DeepSeek，需要较长时间。
 export const maxDuration = 300;
 
-export const POST = apiPost({ bucket: "analyze", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
+export const POST = apiPost({ credit: "analyze", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
   const resumeText = String(body.resumeText ?? "").trim();
   const jobDescription = String(body.jobDescription ?? "").trim();
   if (!resumeText || !jobDescription) throw new Error("缺少简历文本或岗位 JD。");

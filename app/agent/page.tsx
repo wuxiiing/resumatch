@@ -397,6 +397,7 @@ export default function AgentInputPage() {
       const res = await fetch("/api/agent-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(300_000),
         body: JSON.stringify({
           resumeText,
           jobDescription: jd,

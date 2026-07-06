@@ -2,7 +2,7 @@
 // 按需触发(用户点"背调"才搜),省搜索额度。不动旧 MVP。
 
 import { NextResponse } from "next/server";
-import { consumeAgentLimit } from "@/lib/rate-limit";
+import { consumeCredits } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "缺少公司名,无法背调。" }, { status: 400 });
   }
 
-  const rl = consumeAgentLimit("recon", req.headers);
+  const rl = consumeCredits("recon", req.headers);
   if (!rl.ok) return NextResponse.json({ error: rl.error }, { status: rl.status });
 
   const tavilyKey = process.env.TAVILY_API_KEY;
