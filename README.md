@@ -138,11 +138,11 @@ scripts/                       # 测试脚本
 
 ## 作者
 
-**麦桐** — AI 产品经理，独立全栈开发。
+**仵行** — AI 产品经理，独立全栈开发。
 
 - 反馈建议：462380155@qq.com
 - GitHub：[github.com/wuxiiing/resumatch](https://github.com/wuxiiing/resumatch)
 
 ## 许可
 
-MIT License。代码开源，欢迎 Fork / PR / 提 Issue。「简配 · 求职军师」产品概念与设计 © 麦桐，保留所有权利。
+MIT License。代码开源，欢迎 Fork / PR / 提 Issue。「简配 · 求职军师」产品概念与设计 © 仵行，保留所有权利。
