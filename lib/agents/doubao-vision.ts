@@ -19,7 +19,7 @@ async function callOnce(
   maxTokens: number
 ): Promise<unknown> {
   const apiKey = process.env.ARK_API_KEY?.trim();
-  if (!apiKey) throw new Error("缺少 ARK_API_KEY，请用 --env-file=.env.local 运行。");
+  if (!apiKey) throw new Error("缺少 ARK_API_KEY，本地请配在 .env.local；生产请在 Vercel Environment Variables 中添加。");
   const model = process.env.ARK_VISION_MODEL?.trim() || "doubao-seed-1-6-vision-250815";
   const baseUrl = (process.env.ARK_BASE_URL?.trim() || "https://ark.cn-beijing.volces.com/api/v3").replace(
     /\/+$/,

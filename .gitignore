@@ -37,3 +37,6 @@ Thumbs.db
 # 本地备份 / 学习支线（设计上不进版本库）
 /.rescue-backups/
 /learning-1.5/
+
+# prebuild 生成（pdfjs-dist 静态资源，构建时复制）
+/public/pdfjs/

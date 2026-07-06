@@ -105,7 +105,8 @@ export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
   const { getDocument } = await import(
     "pdfjs-dist/legacy/build/pdf.mjs"
   );
-  const pdfjsRoot = join(process.cwd(), "node_modules", "pdfjs-dist");
+  // prebuild 把 wasm/cmaps/standard_fonts 复制到了 public/pdfjs/——Vercel 上保证这个路径一定对。
+  const pdfjsRoot = join(process.cwd(), "public", "pdfjs");
   const standardFontDataUrl = getPdfjsAssetUrl(pdfjsRoot, "standard_fonts");
   const cMapUrl = getPdfjsAssetUrl(pdfjsRoot, "cmaps");
   const wasmUrl = getPdfjsAssetUrl(pdfjsRoot, "wasm");
