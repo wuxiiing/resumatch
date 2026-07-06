@@ -137,8 +137,9 @@ export function CreditBar() {
               简配目前完全免费。每天的 25 点 + 领取 10 点（共 35 点）足够日常使用。
             </p>
             <p className="mt-2 text-[14px] leading-relaxed text-gf-soft">
-              付费方案即将推出——如果你是重度用户、需要更多研判次数，欢迎联系作者反馈需求。
+              付费方案即将推出——如果你是重度用户、需要更多研判次数，欢迎反馈：
             </p>
+            <p className="mt-1 text-[13px] text-gf-ink">462380155@qq.com</p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
