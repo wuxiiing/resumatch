@@ -107,7 +107,7 @@ export default function ProfilePage() {
             <span className="h-px flex-1 bg-gf-rule" />
           </div>
           <Field label="简历名" hint="导出文件名用">
-            <input className={inputCls} value={resumeName} onChange={(e) => setResumeName(e.target.value)} placeholder="例如:麦桐_简历" />
+            <input className={inputCls} value={resumeName} onChange={(e) => setResumeName(e.target.value)} placeholder="例如：产品经理_简历" />
           </Field>
           <Field label="简历正文">
             <textarea
