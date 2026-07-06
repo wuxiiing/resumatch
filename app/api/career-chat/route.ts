@@ -1,7 +1,6 @@
 // 小简 · 职业规划老师 · 多轮对话后端。扎根「简历 + 求职意愿」，陪求职者把方向聊清楚。
 // 原理同军师对话：系统人设 + 注入上下文(简历+意愿+knowledge) + 对话历史 → DeepSeek chat。
 
-import { NextResponse } from "next/server";
 import { apiPost } from "@/lib/api-helpers";
 import { search, matchMajor, formatForPrompt } from "@/lib/knowledge-index";
 
@@ -26,7 +25,7 @@ function clip(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…(略)" : s;
 }
 
-export const POST = apiPost({ bucket: "career", requireKey: "DEEPSEEK_API_KEY" }, async (body, _req) => {
+export const POST = apiPost({ bucket: "career", requireKey: "DEEPSEEK_API_KEY" }, async (body) => {
   const history = Array.isArray(body.messages)
     ? (body.messages as ChatMsg[]).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     : [];

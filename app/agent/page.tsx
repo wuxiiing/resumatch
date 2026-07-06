@@ -160,7 +160,6 @@ export default function AgentInputPage() {
     if (loadedResume) pushMsg("agent", `简历还替你收着(${loadedName})。`);
     const step = nextIntakeStep({ hasResume: !!loadedResume, hasJd: false });
     pushMsg("agent", step.ask);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 简历/意图变化 → 回写本地档案
