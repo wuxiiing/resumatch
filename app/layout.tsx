@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ResuMatch",
-  description: "中文简历与岗位 JD 匹配分析工具"
+  title: "简配 · 求职军师",
+  description: "看穿 JD、研判值不值得打、告诉你怎么打——AI 求职决策工具",
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({
@@ -13,7 +15,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
+      </body>
     </html>
   );
 }
