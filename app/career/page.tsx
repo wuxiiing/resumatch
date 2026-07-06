@@ -3,15 +3,17 @@
 // 简配 2.0 · 职业规划「小简」· 聊天式。小简是职业规划老师,扎根简历+意愿,多轮对话做规划。
 // 对话历史存 localStorage(同浏览器);后端 /api/career-chat。不画时间饼、对不上就老实点破。
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { AppNav } from "@/components/AppNav";
 import { JIANPEI_PROFILE_KEY, type JianpeiProfile } from "@/lib/agent-report";
+import type { CareerPath } from "@/lib/agents/career-path/schema";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_KEY = "jianpei:career-chat";
+const PENDING_KEY = "jianpei:career-pending"; // 换窗口/HMR 恢复信号（sessionStorage 跨 fast-refresh 存活）
 const OPENING =
   "你好,我是小简,你的职业规划老师。我看了你的简历和你想去的方向——想聊往哪走、还差什么、哪条路更稳,都可以问我。我只照着你的简历和现实讲,不哄你。";
 
@@ -26,42 +28,106 @@ export default function CareerPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pathLoading, setPathLoading] = useState(false);
+  const [pathResult, setPathResult] = useState<CareerPath | null>(null);
+  const [pathError, setPathError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
+  const recoveringRef = useRef(false); // 区分"换窗口恢复"与"正常发送"触发 loading
 
+  // 卸载时：标记已卸载 + 取消飞行中的请求（避免旧组件实例写 state 和 HMR 竞态）
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  // 挂载恢复：从 localStorage 加载消息 + 检测孤儿消息（最后一条是 user）自动重试
   useEffect(() => {
     try {
       const raw = localStorage.getItem(JIANPEI_PROFILE_KEY);
       if (raw) setProfile(JSON.parse(raw) as JianpeiProfile);
       const chat = localStorage.getItem(CHAT_KEY);
-      if (chat) setMessages(JSON.parse(chat) as Msg[]);
+      if (chat) {
+        const msgs = JSON.parse(chat) as Msg[];
+        setMessages(msgs);
+        // 检测孤儿消息：最后一条是 user → 请求飞行中被 HMR/换窗口打断
+        if (msgs.length > 0 && msgs[msgs.length - 1].role === "user") {
+          recoveringRef.current = true;
+          setLoading(true);
+        }
+      }
     } catch {
       /* 坏数据当没有 */
     }
     setLoaded(true);
   }, []);
 
+  // 孤儿消息恢复：loading 被挂载逻辑设为 true 且 recoveringRef 标志位真 → 重试最后一条 user 消息
   useEffect(() => {
-    if (messages.length === 0) return;
-    try {
-      localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
-    } catch {
-      /* 存不下不影响 */
+    if (!loading || !profile?.resumeText) return;
+    if (!recoveringRef.current) return; // 正常发送触发的 loading，不抢
+    recoveringRef.current = false;
+
+    const msgs = messages;
+    if (msgs.length === 0 || msgs[msgs.length - 1].role !== "user") {
+      setLoading(false);
+      return;
     }
-  }, [messages]);
+    sessionStorage.removeItem(PENDING_KEY);
+    retryLastMessage(msgs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, profile]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, loading]);
+  async function retryLastMessage(priorMsgs: Msg[]) {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const res = await fetch("/api/career-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeText: profile!.resumeText,
+          targetDirection: profile!.intent?.targetDirection ?? "",
+          hardNo: profile!.intent?.hardNo ?? [],
+          messages: priorMsgs
+        }),
+        signal: controller.signal
+      });
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      if (!res.ok) throw new Error(data.error || "对话失败");
+      setMessages((m) => [...m, { role: "assistant", content: data.reply as string }]);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (!mountedRef.current) return;
+      setError(e instanceof Error ? e.message : "对话失败,请重试");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }
 
-  async function send(quick?: string) {
+  const send = useCallback(async (quick?: string) => {
     const text = (quick ?? input).trim();
     if (!text || loading || !profile?.resumeText) return;
     setError("");
     setInput("");
     const next: Msg[] = [...messages, { role: "user", content: text }];
     setMessages(next);
+    // 写入 localStorage + sessionStorage 标记（供 HMR 恢复）
+    try {
+      localStorage.setItem(CHAT_KEY, JSON.stringify(next));
+      sessionStorage.setItem(PENDING_KEY, "1");
+    } catch { /* ignore */ }
     setLoading(true);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const res = await fetch("/api/career-chat", {
         method: "POST",
@@ -71,15 +137,48 @@ export default function CareerPage() {
           targetDirection: profile.intent?.targetDirection ?? "",
           hardNo: profile.intent?.hardNo ?? [],
           messages: next
+        }),
+        signal: controller.signal
+      });
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      if (!res.ok) throw new Error(data.error || "对话失败");
+      setMessages((m) => [...m, { role: "assistant", content: data.reply as string }]);
+      sessionStorage.removeItem(PENDING_KEY);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (!mountedRef.current) return;
+      setError(e instanceof Error ? e.message : "对话失败,请重试");
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+        sessionStorage.removeItem(PENDING_KEY);
+      }
+    }
+  }, [input, loading, messages, profile]);
+
+  // 路径推演：调用 /api/career-path → 展示结果卡片
+  async function runPathSimulation() {
+    if (pathLoading || !profile?.resumeText) return;
+    setPathError("");
+    setPathResult(null);
+    setPathLoading(true);
+    try {
+      const res = await fetch("/api/career-path", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeText: profile.resumeText,
+          targetDirection: profile.intent?.targetDirection?.trim() || undefined
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "对话失败");
-      setMessages((m) => [...m, { role: "assistant", content: data.reply as string }]);
+      if (!res.ok) throw new Error(data.error || "推演失败");
+      setPathResult(data as CareerPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "对话失败,请重试");
+      setPathError(e instanceof Error ? e.message : "路径推演失败，请重试");
     } finally {
-      setLoading(false);
+      setPathLoading(false);
     }
   }
 
@@ -114,6 +213,14 @@ export default function CareerPage() {
 
           {hasResume && messages.length === 0 && (
             <div className="ml-[42px] space-y-1.5">
+              <button
+                type="button"
+                onClick={runPathSimulation}
+                disabled={pathLoading}
+                className="block w-full rounded-lg border border-gf-green/50 bg-gf-greentint/30 px-3 py-2.5 text-left font-serifcn text-[13px] text-gf-greend transition-colors hover:bg-gf-greentint/60"
+              >
+                {pathLoading ? "小简在推演你的职业路径…" : "🗺 推演一下我的职业路径 →"}
+              </button>
               {["我这简历能往哪些方向走?", "我想去某个方向,现实吗?", "要够格还差点啥?"].map((q) => (
                 <button
                   key={q}
@@ -148,6 +255,40 @@ export default function CareerPage() {
             </div>
           )}
           {error && <div className="ml-[42px] text-[12.5px] text-gf-seal">{error}</div>}
+
+          {/* 路径推演结果卡片 */}
+          {pathResult && (
+            <div className="ml-[42px] rounded-xl border border-gf-green/30 bg-gf-greentint/10 p-4">
+              <p className="mb-0.5 text-[11px] tracking-[0.15em] text-gf-green">职业路径推演</p>
+              <p className="mb-3 text-[14px] leading-relaxed text-gf-ink">{pathResult.snapshot}</p>
+              {pathResult.paths.map((p, i) => (
+                <div key={i} className="mb-3 last:mb-0">
+                  <div className="mb-1.5 flex items-baseline gap-2">
+                    <span className="font-serifcn text-[14px] font-medium text-gf-ink">{p.label}</span>
+                    <span className="text-[11.5px] text-gf-faint">{p.rationale}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {p.steps.map((s, j) => (
+                      <div key={j} className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-gf-green" />
+                        <div className="min-w-0 text-[13px] leading-relaxed">
+                          <span className="font-medium text-gf-ink">{s.position}</span>
+                          <span className={`ml-1.5 text-[11px] ${s.feasibility === "高" ? "text-gf-green" : s.feasibility === "中" ? "text-gf-soft" : "text-gf-seal"}`}>
+                            {s.feasibility === "高" ? "✓ 可及" : s.feasibility === "中" ? "○ 可冲" : "△ 需补课"}
+                          </span>
+                          <span className="ml-1.5 text-gf-faint">{s.basis}</span>
+                          {s.gapIfAny && <span className="ml-1 text-gf-seal">— {s.gapIfAny}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {i < pathResult.paths.length - 1 && <div className="mt-2 border-t border-gf-rule" />}
+                </div>
+              ))}
+              <p className="mt-3 text-[11px] leading-relaxed text-gf-faint">{pathResult.caveat}</p>
+            </div>
+          )}
+          {pathError && <div className="ml-[42px] text-[12.5px] text-gf-seal">{pathError}</div>}
         </div>
 
         <div className="mt-3 shrink-0 border-t border-gf-rule pt-3">

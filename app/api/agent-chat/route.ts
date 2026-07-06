@@ -1,14 +1,13 @@
 // 军师对话 · 后端引擎。扎根于「研判报告 + 简历」的多轮对话——不是客服 bot。
-// 原理:系统人设 + 注入上下文(报告+简历) + 对话历史 → DeepSeek chat。
-// 模型无状态,"记忆"靠每轮重发历史 + 固定上下文。不动旧 MVP。
+// 原理：系统人设 + 注入上下文(报告+简历) + 对话历史 → DeepSeek chat。
+// 模型无状态，"记忆"靠每轮重发历史 + 固定上下文。不动旧 MVP。
 
-import { NextResponse } from "next/server";
+import { apiPost } from "@/lib/api-helpers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
-type Body = { report?: unknown; resumeText?: string; messages?: ChatMsg[] };
 
 const SYSTEM = `你是「简配」的求职军师——一个有十年经验的 HR + 求职战略顾问,不是客服机器人。
 你面对【这一位求职者】和他的【一份岗位研判报告】(已含:岗位定位 目标/跳板/该绕开、JD 真身、逐条匹配、避雷、应对策略)。
@@ -24,29 +23,18 @@ function clip(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…(略)" : s;
 }
 
-export async function POST(req: Request) {
-  let body: Body;
-  try {
-    body = (await req.json()) as Body;
-  } catch {
-    return NextResponse.json({ error: "请求体必须是合法 JSON。" }, { status: 400 });
-  }
+export const POST = apiPost({ requireKey: "DEEPSEEK_API_KEY" }, async (body, _req) => {
+  const history = Array.isArray(body.messages)
+    ? (body.messages as ChatMsg[]).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    : [];
+  if (history.length === 0) throw new Error("缺少对话消息。");
 
-  const history = Array.isArray(body.messages) ? body.messages.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string") : [];
-  if (history.length === 0) {
-    return NextResponse.json({ error: "缺少对话消息。" }, { status: 400 });
-  }
-
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "服务未配置 DEEPSEEK_API_KEY。" }, { status: 500 });
-  }
   const baseUrl = process.env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com";
   const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
   const context =
     `【研判报告】\n${clip(JSON.stringify(body.report ?? {}), 6000)}\n\n` +
-    `【简历原文】\n${clip((body.resumeText ?? "").trim() || "（求职者未提供简历正文）", 4000)}`;
+    `【简历原文】\n${clip(String(body.resumeText ?? "").trim() || "（求职者未提供简历正文）", 4000)}`;
 
   const payload = {
     model,
@@ -54,23 +42,16 @@ export async function POST(req: Request) {
     messages: [{ role: "system", content: `${SYSTEM}\n\n${context}` }, ...history.map((m) => ({ role: m.role, content: m.content }))]
   };
 
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      return NextResponse.json({ error: `AI 服务出错（${res.status}），请重试。` }, { status: 502 });
-    }
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const reply = data?.choices?.[0]?.message?.content;
-    if (typeof reply !== "string" || reply.trim() === "") {
-      return NextResponse.json({ error: "AI 返回为空，请重试。" }, { status: 502 });
-    }
-    return NextResponse.json({ reply });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "对话失败。";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}` },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`AI 服务出错（${res.status}），请重试。`);
+
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const reply = data?.choices?.[0]?.message?.content;
+  if (typeof reply !== "string" || reply.trim() === "") throw new Error("AI 返回为空，请重试。");
+
+  return { reply };
+});

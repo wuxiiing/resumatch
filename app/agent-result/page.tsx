@@ -355,6 +355,31 @@ function VerdictView({ report }: { report: AgentReport }) {
               </ol>
             </>
           )}
+          {plan.interviewFocus?.length > 0 && (
+            <div className="mt-4 rounded-lg border border-gf-rule bg-gf-surface/50 p-3.5">
+              <p className="mb-2.5 text-[13px] font-medium text-gf-ink">面试考点比重（根据 JD 信号推断）</p>
+              <div className="space-y-2">
+                {plan.interviewFocus.map((f, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-gf-green" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[13px] text-gf-ink">{f.area}</span>
+                        <span className="text-[12px] text-gf-green">≈{f.weight}%</span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1">
+                        {/* 比重条 */}
+                        <div className="h-1 w-full max-w-[180px] overflow-hidden rounded-full bg-gf-rule">
+                          <div className="h-full rounded-full bg-gf-green/60" style={{ width: `${Math.min(f.weight, 100)}%` }} />
+                        </div>
+                      </div>
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-gf-faint">{f.reason}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {plan.salaryTip && (
             <p className="mt-3 text-[14px] leading-relaxed">
               <span className="font-serifcn text-gf-green">谈薪　</span>

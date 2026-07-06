@@ -73,6 +73,7 @@ export default function AgentInputPage() {
   const [jd, setJd] = useState("");
   const [goal, setGoal] = useState("");
   const hardNoRef = useRef<string[]>([]); // 老档案里的"绝不接受",原样保留回写
+  const careerInviteRef = useRef(false); // 上次 agent 消息是规划邀请 → 渲染按钮
   // ── 对话 ──
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
@@ -268,6 +269,15 @@ export default function AgentInputPage() {
     pushMsg("user", text.length > 140 ? `${text.slice(0, 140)}…` : text);
     setIntaking(true);
     try {
+      // 规划意图识别：有简历无JD + 关键词匹配 → 直接引去职业规划
+      const careerIntent = /帮(我|忙).{0,3}(定|看|选|找).{0,3}(方向|规划|适合|能做什么|往哪)|没有.{0,3}(岗位|jd|方向|目标)|不做研判|职业规划/.test(text);
+      if (careerIntent && resumeText.trim() && !jd.trim()) {
+        careerInviteRef.current = true;
+        pushMsg("agent", "没有岗位也能聊。去小简那——把你简历摊开，看看能往哪些方向走。");
+        setIntaking(false);
+        return;
+      }
+      careerInviteRef.current = false;
       const res = await fetch("/api/intake-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -514,6 +524,19 @@ export default function AgentInputPage() {
             {intaking && <div className="mt-2 text-[12px] text-[#f2efe6]/55">军师阅卷中…</div>}
           </div>
 
+          {/* 规划邀请卡片：用户说"帮我定方向"后出现 */}
+          {careerInviteRef.current && (
+            <div className="px-5 pb-3">
+              <Link
+                href="/career"
+                className="flex items-center justify-between rounded-xl border border-[#8fb996]/40 bg-[#8fb996]/10 px-4 py-3 transition-colors hover:bg-[#8fb996]/20"
+              >
+                <span className="text-[13.5px] text-[#cfe3cf]">去小简那，看看简历能往哪些方向走</span>
+                <span className="font-serifcn text-[16px] text-[#8fb996]">→</span>
+              </Link>
+            </div>
+          )}
+
           {/* 槽位小票(✕ = 撤下换料) */}
           <div className="flex flex-wrap gap-2 px-5 pt-1">
             {resumeText.trim() ? (
@@ -595,6 +618,18 @@ export default function AgentInputPage() {
               递
             </button>
           </div>
+
+          {/* 规划模式桥：有简历无JD → 次级CTA去职业规划 */}
+          {resumeText.trim() && !jd.trim() && !loading && (
+            <div className="px-4 pb-2">
+              <Link
+                href="/career"
+                className="block w-full rounded-lg border border-white/10 bg-transparent py-2 text-center font-serifcn text-[13px] text-[#f2efe6]/55 transition-colors hover:border-[#8fb996]/40 hover:text-[#8fb996]"
+              >
+                还没有岗位？先去小简那聊聊你能往哪走 →
+              </Link>
+            </div>
+          )}
 
           {/* 齐了 → 朱印研判 */}
           {ready && !loading && (

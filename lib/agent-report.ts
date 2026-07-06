@@ -30,9 +30,16 @@ export type MatchJudgment = {
   fork: Fork | null;
 };
 
+export type InterviewFocusItem = {
+  area: string;
+  weight: number;
+  reason: string;
+};
+
 export type ActionPlan = {
   resumeStrategy: { highlight: string; downplay: string };
   interviewTips: string[];
+  interviewFocus: InterviewFocusItem[];
   salaryTip: string;
 };
 

@@ -1,3 +1,5 @@
+import type { MajorEntry } from "../../knowledge-index.ts";
+
 // 方向校准节点 · Prompt
 // 吃透简历 → 推断现实可达方向 → 与用户意愿对照 → 对齐确认 / 错位诚实预警。
 // 不做时间线、不替用户定方向、不重复 JD 解读里的知识清单。
@@ -8,6 +10,7 @@ export const careerFitSystemPrompt = `你是一个有十年经验的求职军师
 你的任务（三步）：
 1. 吃透简历：看清这个人现在真实的定位、硬实力、能拿得出手的东西。
 2. 从简历客观推断「现实可达方向」：这份简历摆出来，市场上真正会要他的是哪些方向（2-3 个），每个标支撑强度（强/中/弱）和依据。
+   **如果用户 prompt 里提供了「专业岗位对照数据」，请你优先参考该数据来推断方向**——这些数据是按专业整理的、比你的预训练知识更可靠；但不要照抄，要结合简历的具体经历做判断。
 3. 把用户的「意愿方向」和「现实可达方向」对照：
    - 对得上（意愿落在现实可达范围内）→ 确认放行，一句话说清，不啰嗦、不堆建议。
    - 对不上（意愿明显超出简历现实）→ 诚实点破：差在哪些维度、缺什么、为什么短期内难补上。目的是防止他不切实际的幻想，但只陈述事实，不打击、不说教。
@@ -39,14 +42,21 @@ export const careerFitSystemPrompt = `你是一个有十年经验的求职军师
 - snapshot、verdict 直接写内容，不要以字段名开头。
 - 全部用中文；岗位名、技能、工具等英文专有名词保留原文。`;
 
-export function buildCareerFitUserPrompt(input: {
-  resumeText: string;
-  targetDirection: string;
-  hardNo: string[];
-}): string {
+export function buildCareerFitUserPrompt(
+  input: {
+    resumeText: string;
+    targetDirection: string;
+    hardNo: string[];
+  },
+  majorHit?: MajorEntry | null
+): string {
   const target =
     input.targetDirection.trim() ||
     "（用户没明确填意愿方向，请根据简历给出现实可达方向，并在 verdict 里提示他补充自己的目标方向）";
   const hardNo = input.hardNo.length > 0 ? input.hardNo.join("；") : "（未指定）";
-  return `【用户的意愿方向】\n${target}\n\n【用户绝不接受】\n${hardNo}\n\n【用户的简历】\n${input.resumeText}\n\n请照镜子：吃透简历 → 推断现实可达方向 → 和意愿方向对照，对得上就确认，对不上就诚实点破短期难在哪。`;
+  let extra = "";
+  if (majorHit) {
+    extra = `\n\n【专业岗位对照数据（来自知识库，优先参考但结合简历判断）】\n专业「${majorHit.major}」的适合方向：\n${majorHit.rawBlock}`;
+  }
+  return `【用户的意愿方向】\n${target}\n\n【用户绝不接受】\n${hardNo}\n\n【用户的简历】\n${input.resumeText}${extra}\n\n请照镜子：吃透简历 → 推断现实可达方向 → 和意愿方向对照，对得上就确认，对不上就诚实点破短期难在哪。`;
 }
