@@ -197,8 +197,9 @@ export function consumeCredits(
 
   // 4. 全站熔断由各 limiter 的 site 上限自动处理（check 时已累计 siteCount）
 
-  const used = creditLimiter.peek(ip);
-  return { ok: true, dayKey: getBeijingDayKey(new Date()), ipCount: used, siteCount: 0, creditsLeft: DAILY_CREDITS - used };
+  const usedAfter = creditLimiter.peek(ip);
+  const cap = getDailyCap(ip);
+  return { ok: true, dayKey: getBeijingDayKey(new Date()), ipCount: usedAfter, siteCount: 0, creditsLeft: cap - usedAfter };
 }
 
 /** 记录失败（用于冻结检测） */

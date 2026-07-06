@@ -24,6 +24,19 @@ export function CreditBar() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // 切窗口回来时刷新（可能在其他标签页用掉了额度）
+  useEffect(() => {
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
+
+  // 打开下拉时刷新（确保显示最新数据）
+  function handleToggle() {
+    refresh();
+    setOpen(!open);
+  }
+
   async function claim() {
     setClaiming(true);
     try {
@@ -55,7 +68,7 @@ export function CreditBar() {
       <button
         ref={btnRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
         className="flex items-center gap-1.5 rounded-full border border-gf-rule px-2.5 py-1 text-[11px] text-gf-soft transition-colors hover:bg-gf-greentint/40"
         title="今日免费额度"
       >
