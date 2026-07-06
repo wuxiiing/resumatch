@@ -40,8 +40,8 @@ function flattenResume(r: StructuredResume): string {
   return L.join("\n");
 }
 
-// 上传前压图(≤1280px,jpeg 0.85):省豆包 image token,也快
-async function imageFileToDataUrl(file: File, maxSide = 1280): Promise<string> {
+// 上传前压图(≤1024px, jpeg 0.7):省豆包 token+提速，Vercel 60s 上限内完成
+async function imageFileToDataUrl(file: File, maxSide = 1024): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((ok, err) => {
@@ -59,7 +59,7 @@ async function imageFileToDataUrl(file: File, maxSide = 1280): Promise<string> {
     const ctx = c.getContext("2d");
     if (!ctx) throw new Error("浏览器不支持图片处理");
     ctx.drawImage(img, 0, 0, w, h);
-    return c.toDataURL("image/jpeg", 0.85);
+    return c.toDataURL("image/jpeg", 0.7);
   } finally {
     URL.revokeObjectURL(url);
   }

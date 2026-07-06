@@ -48,16 +48,24 @@ async function callOnce(
       stream: false,
     }),
   });
-  if (!res.ok) throw new Error(`豆包视觉请求失败：HTTP ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`豆包视觉 HTTP ${res.status}：${errBody.slice(0, 200)}`);
+  }
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("豆包视觉返回内容为空。");
-  return JSON.parse(extractJson(content));
+  const rawContent = data.choices?.[0]?.message?.content;
+  if (!rawContent) throw new Error(`豆包视觉返回内容为空（choices=${JSON.stringify(data.choices?.length)}）`);
+  try {
+    return JSON.parse(extractJson(rawContent));
+  } catch (e) {
+    throw new Error(`豆包视觉 JSON 解析失败：${rawContent.slice(0, 200)}`);
+  }
 }
 
 type Validation<T> = { ok: true; data: T } | { ok: false; error: string };
 
 // 单次请求 → 校验 → 不合规（漏字段 / JSON 截断 / 解析失败）就重试。沿用 deepseek.ts 的兜底逻辑。
+// ⚠️ 豆包视觉单次 ~27s，Vercel Hobby 上限 60s → retries 默认 1（最多 2 次，~54s）
 export async function callDoubaoVisionJson<T>(
   system: string,
   userText: string,
@@ -66,7 +74,7 @@ export async function callDoubaoVisionJson<T>(
   opts: { maxTokens?: number; retries?: number } = {}
 ): Promise<T> {
   const maxTokens = opts.maxTokens ?? 4000;
-  const retries = opts.retries ?? 2;
+  const retries = opts.retries ?? 1;
   let lastError = "未知错误";
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -77,7 +85,9 @@ export async function callDoubaoVisionJson<T>(
       lastError = v.error;
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);
+      // 非 JSON 解析错误不重试（超时/网络/鉴权重试也没用）
+      if (lastError.includes("fetch failed") || lastError.includes("timeout") || lastError.includes("HTTP 4")) break;
     }
   }
-  throw new Error(`豆包视觉调用重试 ${retries} 次后仍失败：${lastError}`);
+  throw new Error(`豆包视觉调用失败：${lastError}`);
 }
