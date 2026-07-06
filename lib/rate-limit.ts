@@ -112,12 +112,8 @@ const CREDIT_LABELS: Record<CreditAction, string> = {
   recon: "背调调查", structure: "简历整理", intake: "文字识别", parse: "简历解析", export: "导出",
 };
 
-// 操作硬上限（有信用点也最多跑这些次）
-const HARD_CAPS: Partial<Record<CreditAction, number>> = {
-  analyze: 3,
-  image: 10,
-  recon: 5,
-};
+// 操作硬上限（不再限制——用户自己分配 25 点，爱全花在研判也行）
+const HARD_CAPS: Partial<Record<CreditAction, number>> = {};
 
 // 全站限额
 const SITE_LIMITS: Record<CreditAction, number> = {
@@ -182,18 +178,13 @@ export function consumeCredits(
 
   // 2. 信用点检查（免费操作跳过）
   if (cost > 0) {
-    const r = creditLimiter.check(ip, DAILY_CREDITS);
-    if (!r.ok) {
-      return { ...r, error: `今日 25 点免费额度已用完，明天自动重置。` };
-    }
-    // 信用点是"池子"，消费 cost 点需要连续扣 cost 次（用 ipCount 累加）
-    // 简化：真实扣点 = 当前已用 + cost ≤ 25
+    const cap = getDailyCap(ip);
     const used = creditLimiter.peek(ip);
-    if (used + cost > DAILY_CREDITS) {
-      return { ok: false, reason: "credits", status: 429, error: `余额不足：${label}需要 ${cost} 点，你只剩 ${DAILY_CREDITS - used} 点。`, dayKey: "", ipCount: used, siteCount: 0 };
+    if (used + cost > cap) {
+      return { ok: false, reason: "credits", status: 429, error: `余额不足：${label}需要 ${cost} 点，你只剩 ${cap - used} 点（今日共 ${cap} 点）。`, dayKey: "", ipCount: used, siteCount: 0 };
     }
     // 消耗信用点（扣 cost 次计数）
-    for (let i = 0; i < cost; i++) creditLimiter.check(ip, DAILY_CREDITS);
+    for (let i = 0; i < cost; i++) creditLimiter.check(ip, cap);
   }
 
   // 3. 操作硬上限
@@ -224,9 +215,31 @@ export function recordFail(headers: Headers): void {
 }
 
 /** 获取当前 IP 剩余信用点 */
-export function getCreditsLeft(headers: Headers): { used: number; left: number; daily: number } {
-  if (process.env.RATE_LIMIT_BYPASS === "1") return { used: 0, left: 999, daily: DAILY_CREDITS };
+export function getCreditsLeft(headers: Headers): { used: number; left: number; daily: number; claimed: boolean } {
+  if (process.env.RATE_LIMIT_BYPASS === "1") return { used: 0, left: 999, daily: 999, claimed: true };
   const ip = getClientIp(headers);
   const used = creditLimiter.peek(ip);
-  return { used, left: Math.max(0, DAILY_CREDITS - used), daily: DAILY_CREDITS };
+  const cap = getDailyCap(ip);
+  return { used, left: Math.max(0, cap - used), daily: cap, claimed: isClaimed(ip) };
+}
+
+// ─── 每日免费加点 ───
+const FREE_BONUS = 10;
+const claimedBonus = new Map<string, string>(); // ip → dayKey
+
+function isClaimed(ip: string): boolean {
+  return claimedBonus.get(ip) === getBeijingDayKey(new Date());
+}
+
+function getDailyCap(ip: string): number {
+  return DAILY_CREDITS + (isClaimed(ip) ? FREE_BONUS : 0);
+}
+
+/** 领取每日免费点数。返回 { ok, daily, error? } */
+export function claimFreeCredits(headers: Headers): { ok: boolean; daily: number; error?: string } {
+  if (process.env.RATE_LIMIT_BYPASS === "1") return { ok: true, daily: 999 };
+  const ip = getClientIp(headers);
+  if (isClaimed(ip)) return { ok: false, daily: DAILY_CREDITS, error: "今天已经领过了，明天再来。" };
+  claimedBonus.set(ip, getBeijingDayKey(new Date()));
+  return { ok: true, daily: DAILY_CREDITS + FREE_BONUS };
 }
