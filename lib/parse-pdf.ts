@@ -105,11 +105,31 @@ export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
   const { getDocument } = await import(
     "pdfjs-dist/legacy/build/pdf.mjs"
   );
-  // prebuild 把 wasm/cmaps/standard_fonts 复制到了 public/pdfjs/——Vercel 上保证这个路径一定对。
-  const pdfjsRoot = join(process.cwd(), "public", "pdfjs");
-  const standardFontDataUrl = getPdfjsAssetUrl(pdfjsRoot, "standard_fonts");
-  const cMapUrl = getPdfjsAssetUrl(pdfjsRoot, "cmaps");
-  const wasmUrl = getPdfjsAssetUrl(pdfjsRoot, "wasm");
+
+  // 尝试多个路径找 cmaps/standard_fonts（prebuild → public/pdfjs/；fallback → node_modules）
+  const candidates = [
+    join(process.cwd(), "public", "pdfjs"),
+    join(process.cwd(), "node_modules", "pdfjs-dist"),
+  ];
+  let standardFontDataUrl = "";
+  let cMapUrl = "";
+  for (const root of candidates) {
+    try {
+      // 用 fs.accessSync 验证目录存在
+      const fs = await import("fs");
+      fs.accessSync(join(root, "cmaps"));
+      cMapUrl = getPdfjsAssetUrl(root, "cmaps");
+      standardFontDataUrl = getPdfjsAssetUrl(root, "standard_fonts");
+      break;
+    } catch {
+      continue;
+    }
+  }
+  if (!cMapUrl) {
+    throw getUserError("PDF 解析环境未就绪（cmaps 资源缺失），请联系开发者。");
+  }
+
+  // wasm 不需要——只做文本提取、不渲染；设 null 跳过 wasm 加载，避免 Vercel Lambda 文件系统问题
   const documentOptions: PdfDocumentOptions = {
     cMapPacked: true,
     cMapUrl,
@@ -118,7 +138,6 @@ export async function parsePdfResume(buffer: Buffer): Promise<ParsedPdfResume> {
     disableWorker: true,
     standardFontDataUrl,
     useWorkerFetch: false,
-    wasmUrl
   };
   const loadingTask = getDocument(documentOptions);
   const pdf = await loadingTask.promise;

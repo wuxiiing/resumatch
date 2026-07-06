@@ -88,19 +88,21 @@ export async function POST(request: Request) {
     return NextResponse.json(parsedResume);
   } catch (error) {
     const userErrorMessage = getUserErrorMessage(error);
+    const rawMessage = error instanceof Error ? error.message : "Unknown parse error";
 
     console.error("[PARSE_RESUME_ERROR]", {
       fileType,
-      message: error instanceof Error ? error.message : "Unknown parse error",
+      message: rawMessage,
       name: error instanceof Error ? error.name : "UnknownError"
     });
 
+    // 把真实错误返回给前端，方便定位（生产环境同样——PDF 解析不确定性太高，藏错误信息只会让用户反复试）
     return NextResponse.json(
       {
         error:
           userErrorMessage ??
           (fileType === "pdf"
-            ? "服务器 PDF 解析配置异常，请稍后重试。"
+            ? `PDF 解析失败：${rawMessage}`
             : "解析简历文件失败，请确认文件未损坏后重试。")
       },
       { status: userErrorMessage ? 400 : 500 }
