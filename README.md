@@ -1,143 +1,139 @@
-# ResuMatch
+# 简配 · ResuMatch
 
-ResuMatch 是一个中文简历与岗位描述匹配分析工具。用户上传简历并填写目标岗位描述后，系统会解析简历文本，调用 DeepSeek 生成结构化匹配报告，并在结果页展示岗位匹配度、关键词覆盖、简历问题定位和改进建议。
+> **求职军师**，不是简历打分器。看穿 JD、研判值不值得打、告诉你怎么打。
 
-当前版本定位为 MVP，核心流程已经部署到 Vercel 并完成了人工可用性检查。MVP 收尾后，项目会先进入 Agent 教学与实验支线，再考虑完整的 Agent 版本重构。
+把简历和目标岗位丢进来，军师逐层过卷——先解读 JD 真身、再提取简历证据、然后立体匹配给裁决（目标/跳板/该绕开），最后出具体的简历改写策略 + 面试考点拆解 + 谈薪话术。聊完还能改简历、选模板、导出专业 PDF/Word。
 
-## 在线状态
+## 在线地址
 
-- 部署平台：Vercel
-- 当前阶段：MVP 已部署，可用于基础体验和小流量验证
-- 生产环境变量：`DEEPSEEK_API_KEY`
-- 可选环境变量：`DEEPSEEK_MODEL`、`DEEPSEEK_API_BASE_URL`
+部署在 Vercel，push main 自动部署。
 
 ## 核心功能
 
-- 上传简历文件并提取正文
-- 输入目标岗位描述或招聘 JD
-- 调用 DeepSeek 生成匹配分析
-- 展示整体匹配判断、关键词覆盖和改进建议
-- 在结果页查看简历片段级标注
-- 导出干净版 Word 分析报告
-- 在当前浏览器保存本地历史记录
-- 对分析接口进行基础限流，降低误用风险
+### 研判（主流程）
+- **竹林输入页**：视频背景 + 玻璃对话框，支持文字/文件/截图入场，豆包视觉 OCR 图片简历
+- **JD 真身解读**：看穿岗位到底要什么人，识别潜台词、信号词、信息缺口
+- **简历证据提取**：从简历里翻牌，不评判，只列证据
+- **立体匹配研判**：信号 → 后端规则定级（目标/跳板/该绕开），不靠模型拍板；附带取舍分析、避雷警告、条件分叉
+- **应对策略**：简历扬长避短 + 面试要点 + 面试考点比重拆解（权重% + JD 依据）+ 谈薪策略
 
-## 支持的简历格式
+### 职业规划
+- **小简聊天**：扎根简历和意愿的多轮对话，做方向校准和专业→岗位推荐
+- **知识库增强**：40+ 专业的岗位对照数据 + 求职方法论语料，对话时自动检索注入
+- **路径推演**：点一下推演 2-3 条职业路径，每条 2-3 步，标 feasibility + 简历依据 + 差距
 
-- `.docx`
-- `.xlsx`
-- 文本型 `.pdf`
-- UTF-8 `.txt`
+### 简历工作台
+- **结构化编辑**：LLM 智能整理简历 + 填空式/对话式编辑
+- **模板系统**：4 套 PDF 模板（ATS 保守 / Apple 极简 / Notion 圆角 / AI-Pro 研判版）+ DOCX 导出
+- **双栏实时预览**：左编辑右预览，改一个字右边立刻变
+- **照片支持**：上传头像，3 套模板自动渲染
 
-## 已知限制
-
-- PDF 解析仍是当前最主要的不稳定点。文本型 PDF 已做支持，但不同 PDF 的内部文本结构差异很大，可能出现换行、顺序或内容提取异常。
-- 扫描件、图片型 PDF 和 OCR 识别不在 MVP 范围内。
-- 匹配分数由大模型生成，同一输入在多次运行时可能存在轻微波动。
-- 历史记录仅保存在当前浏览器本地，不支持账号、云同步或跨设备恢复。
-- 当前限流使用进程内内存计数，适合 MVP 小流量验证；多实例生产流量需要迁移到持久化存储，例如 Vercel KV。
+### 辅助工具
+- **军师对话**：扎根研判报告的多轮追问，不是客服是顾问
+- **公司背调**：Tavily 联网搜 + DeepSeek 综合，只依据公开信息
+- **岗位真实性检测**：搜招聘帖发布时长/重复度信号，识别幽灵岗
+- **本地历史**：浏览器本地存档，可重命名、可删除
 
 ## 技术栈
 
-- Next.js App Router
-- React
-- TypeScript
-- Tailwind CSS
-- DeepSeek Chat Completions API
-- Vercel
+| 层 | 技术 |
+|---|---|
+| 框架 | Next.js App Router + React + TypeScript |
+| 样式 | Tailwind CSS + 新国风设计系统（宣纸/竹青/朱印/节节高） |
+| AI 脑 | DeepSeek（研判/对话/规划/背调） |
+| AI 眼 | 豆包 Seed Vision（图片简历 OCR + 结构化） |
+| 搜索 | Tavily（背调 + 岗位真实性） |
+| 工作流 | LangGraph JS（①②③④ 串行研判管道） |
+| PDF | @react-pdf/renderer（4 套模板 + 字体子集化） |
+| DOCX | docx 库 |
+| 简历解析 | pdfjs-dist + mammoth + xlsx |
+| 部署 | Vercel（Node.js runtime） |
 
 ## 本地运行
 
-安装依赖：
-
 ```bash
 npm install
+npm run dev        # → http://localhost:3000
 ```
 
-创建本地环境变量文件：
+## 环境变量
+
+创建 `.env.local`（不提交）：
 
 ```bash
-DEEPSEEK_API_KEY=your_deepseek_api_key
+# 必填
+DEEPSEEK_API_KEY=sk-xxx          # 研判/对话/规划的「脑」
+ARK_API_KEY=xxx                  # 豆包视觉，图片简历 OCR
+TAVILY_API_KEY=tvly-xxx          # 联网搜，背调+岗位调查
+
+# 可选（有默认值）
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_API_BASE_URL=https://api.deepseek.com
+ARK_VISION_MODEL=doubao-seed-1-6-vision-250815
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 ```
 
-启动开发服务器：
+本地测试时可设 `RATE_LIMIT_BYPASS=1` 跳过限额检查。**生产环境不要设。**
 
-```bash
-npm run dev
-```
+## 部署
 
-打开：
-
-```bash
-http://localhost:3000
-```
-
-## 常用命令
-
-```bash
-npm run lint
-npm run build
-```
+1. 把 3 个必填 key 配到 Vercel Environment Variables
+2. `engines.node` 设为 `24.x`（`pdfjs-dist` 要求）
+3. `npm run build` 本地验证通过 → push main → Vercel 自动部署
+4. 多实例上线前把 `lib/rate-limit.ts` 的内存计数换 Vercel KV
 
 ## 主要项目结构
 
 ```text
 app/
-  page.tsx                    # 首页上传和分析入口
-  result/page.tsx             # 分析结果页
-  api/analyze/route.ts        # DeepSeek 分析接口
-  api/parse-resume/route.ts   # 简历解析接口
-  api/export-word/route.ts    # Word 导出接口
+  agent/page.tsx               # 竹林输入页（视频+玻璃对话框）
+  agent-result/page.tsx        # 研判报告页（国风·决策优先）
+  career/page.tsx              # 小简 · 职业规划
+  profile/page.tsx             # 我的简历（长期档案）
+  resume/page.tsx              # 简历工作台（editor|preview 双栏）
+  api/
+    agent-analyze/route.ts     # 主研判管道 ①②③④
+    agent-chat/route.ts        # 军师对话
+    career/route.ts            # 方向校准
+    career-chat/route.ts       # 小简对话
+    career-path/route.ts       # 职业路径推演
+    parse-resume/route.ts      # 简历文件解析
+    extract-image/route.ts     # 豆包视觉 OCR
+    intake-text/route.ts       # 文字分诊
+    resume-structure/route.ts  # LLM 结构化整理
+    export-resume-template/    # PDF/DOCX 模板导出
+    job-recon/route.ts         # 岗位真实性调查
+    company-recon/route.ts     # 公司背调
 lib/
-  deepseek-client.ts          # DeepSeek 请求、解析和校验
-  analysis-prompt.ts          # 分析提示词
-  analysis-schema.ts          # 报告结构校验
-  segment-original-validator.ts
-types/
-  analysis.ts                 # 分析报告类型
+  agents/                      # Agent 节点（jd-analysis/resume-evidence/match-judge/action-plan/career-fit/career-path）
+  pdf/templates/               # 4 套 PDF 模板（ats-classic/apple/notion/ai-pro）
+  knowledge-index.ts           # 知识库内存索引（40+ 专业岗位对照 + 方法论）
+  api-helpers.ts               # Route 样板 helper
+  rate-limit.ts                # IP 限额（内存版）
+  history.ts                   # 本地研判历史
+  agent-report.ts              # 前端共享数据契约
+  resume-structured.ts         # 结构化简历模型
+  resume-jsonresume.ts         # JSON Resume 导入/导出
+  resume-docx.ts               # DOCX 导出
+knowledge/                     # RAG 语料（3 个 MD 文件）
+scripts/                       # 测试脚本
 ```
 
-## MVP 范围说明
+## 产品原则
 
-当前 MVP 重点验证的是：
+- **不装作知道**：推断必须带概率 + 证据，公司/业务线推断标注"非确定"
+- **判级由规则定**：tier 由后端信号→规则出，不让模型拍板
+- **不编造**：一切扎根简历和 JD 原文，有证据才说
+- **不画时间饼**：不给"30天/3个月"这种周期，只做定性判断
+- **极简克制**：新国风设计系统，一点红原则，Moonshot 向
 
-- 用户能否上传简历并输入岗位描述
-- 系统能否生成可读、可行动的匹配分析
-- 结果页能否清楚展示简历中的优势、缺口和改进方向
-- Word 导出能否提供一个可交付的干净报告
+## 明确不做
 
-暂不包含：
+- 用户注册/登录
+- 一键改写/一键生成简历
+- 多语言
+- 付费系统
 
-- 登录或注册
-- 会员、订阅或支付
-- 网页内直接编辑简历
-- 一键改写完整简历
-- PDF 导出
-- 多语言切换
-- OCR 扫描件识别
+---
 
-## 版本路线
-
-- `1.0 MVP`：当前已部署版本，验证简历解析、岗位匹配分析、结果页展示和 Word 导出等核心闭环。
-- `1.5 Agent 教学/实验版`：用于学习和验证 Agent 基础概念，例如工具调用、自主判断、反思、自检和小规模工具编排。这个阶段可以保留本地实验文件或单独支线，不要求进入正式产品链路。
-- `2.0 完整 Agent 版`：在完成 Agent 学习与实验后，再设计真正的产品级 Agent 架构。
-
-## 下一阶段方向
-
-后续重点会从单次固定分析 pipeline，转向更像真实 Agent 的工作流：
-
-- 让系统自主判断 JD 信息是否足够
-- 让 Agent 决定是否需要追问、补充分析或调用工具
-- 引入更明确的工具层，例如 JD 分析、简历证据提取、岗位市场信息检索、评分校准和报告生成
-- 保留结构化输出校验、工具白名单、超时预算和 fallback 机制，避免 Agent 输出不可控
-
-## 安全说明
-
-- 不要提交 `.env.local`
-- 不要把真实 API Key 写进代码、README、Issue、PR 或聊天记录
-- DeepSeek API Key 应只通过本地环境变量或 Vercel Environment Variables 配置
-- 不要提交完整真实简历、完整 JD 或完整模型原始响应
-
-## 项目状态
-
-MVP 已经可用，PDF 解析仍作为已知限制记录。下一步建议不再继续打磨 MVP 细节，而是进入 Agent 版本设计与实验。
+MIT License. 作者保留「简配 · 求职军师」产品概念与设计的所有权利。
