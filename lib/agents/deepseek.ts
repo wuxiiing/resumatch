@@ -13,7 +13,7 @@ function extractJson(content: string): string {
 async function callOnce(system: string, user: string, maxTokens: number): Promise<unknown> {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
   if (!apiKey) throw new Error("缺少 DEEPSEEK_API_KEY，请用 --env-file=.env.local 运行。");
-  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash";
+  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
   const baseUrl = (process.env.DEEPSEEK_API_BASE_URL?.trim() || "https://api.deepseek.com").replace(
     /\/+$/,
     ""
@@ -28,13 +28,20 @@ async function callOnce(system: string, user: string, maxTokens: number): Promis
         { role: "user", content: user },
       ],
       response_format: { type: "json_object" },
+      // DeepSeek 默认开深度思考（2026-09 起 deepseek-v4-flash 也指向默认思考的 V4.1）：
+      // 思考 token 计入 max_tokens 会把 JSON 挤截断，且思考模式下 temperature 不生效 → 显式关掉
+      thinking: { type: "disabled" },
       temperature: 0,
       max_tokens: maxTokens,
       stream: false,
     }),
   });
   if (!res.ok) throw new Error(`DeepSeek 请求失败：HTTP ${res.status}`);
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
+  if (data.choices?.[0]?.finish_reason === "length")
+    throw new Error(`输出被截断（写满了 max_tokens ${maxTokens}）`);
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("DeepSeek 返回内容为空。");
   return JSON.parse(extractJson(content));

@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "服务未配置 DEEPSEEK_API_KEY。" }, { status: 500 });
   }
   const dsBase = process.env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com";
-  const dsModel = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  const dsModel = process.env.DEEPSEEK_MODEL || "deepseek-flash";
 
   // 1) Tavily 联网搜索:公司口碑 / 加班 / 评价 (+ 这条线)
   const query = `${company} 公司 怎么样 口碑 加班 员工评价 发展前景 ${position}`.trim();

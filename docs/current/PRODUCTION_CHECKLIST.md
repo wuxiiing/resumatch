@@ -16,7 +16,7 @@
 |---|---|
 | `ARK_VISION_MODEL` | `doubao-seed-1-6-vision-250815` |
 | `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` |
-| `DEEPSEEK_MODEL` | `deepseek-v4-flash` |
+| `DEEPSEEK_MODEL` | `deepseek-flash` |
 | `DEEPSEEK_API_BASE_URL` | `https://api.deepseek.com` |
 
 > ⚠️ key 只配在部署平台环境变量,**不进 git**(`.env*.local` 已在 `.gitignore`)。

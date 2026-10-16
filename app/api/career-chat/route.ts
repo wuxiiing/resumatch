@@ -32,7 +32,7 @@ export const POST = apiPost({ credit: "chat", requireKey: "DEEPSEEK_API_KEY" }, 
   if (history.length === 0) throw new Error("缺少对话消息。");
 
   const baseUrl = process.env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com";
-  const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  const model = process.env.DEEPSEEK_MODEL || "deepseek-flash";
 
   const hardNo = Array.isArray(body.hardNo) ? (body.hardNo as string[]).filter((x) => typeof x === "string").join("、") : "";
   const context =

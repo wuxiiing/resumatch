@@ -67,7 +67,7 @@ ARK_API_KEY=xxx                  # 豆包视觉，图片简历 OCR
 TAVILY_API_KEY=tvly-xxx          # 联网搜，背调+岗位调查
 
 # 可选（有默认值）
-DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_MODEL=deepseek-flash
 DEEPSEEK_API_BASE_URL=https://api.deepseek.com
 ARK_VISION_MODEL=doubao-seed-1-6-vision-250815
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3

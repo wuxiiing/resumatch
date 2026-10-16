@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "服务未配置 DEEPSEEK_API_KEY。" }, { status: 500 });
   }
   const dsBase = process.env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com";
-  const dsModel = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  const dsModel = process.env.DEEPSEEK_MODEL || "deepseek-flash";
 
   // 1) Tavily 搜招聘帖:聚焦"这岗位在哪些平台/挂了多久/是否反复在招"
   const query = `${company} ${position} 招聘 岗位 在招 长期招聘`.trim();
