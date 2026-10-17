@@ -6,19 +6,24 @@ import { validateModelMatchOutput, decideVerdict, type MatchJudgment } from "./s
 import type { JdAnalysis } from "../jd-analysis/schema.ts";
 import type { ResumeEvidence } from "../resume-evidence/schema.ts";
 import type { UserIntent } from "../user-intent.ts";
+import type { Recon } from "../recon/schema.ts";
 import { callDeepSeekJson } from "../deepseek.ts";
 
 export async function matchJudgeNode(state: {
   jdAnalysis: JdAnalysis | null;
   resumeEvidence: ResumeEvidence | null;
   userIntent: UserIntent;
+  recon: Recon | null;
 }): Promise<{ matchJudgment: MatchJudgment }> {
+  // 来源链接只给用户看，不进 prompt（省 token）
+  const recon = state.recon?.status === "ok" ? { ...state.recon, sources: undefined } : state.recon;
   const model = await callDeepSeekJson(
     matchJudgeSystemPrompt,
     buildMatchJudgeUserPrompt({
       jdAnalysis: state.jdAnalysis,
       resumeEvidence: state.resumeEvidence,
       userIntent: state.userIntent,
+      recon,
     }),
     validateModelMatchOutput
   );

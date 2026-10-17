@@ -89,7 +89,10 @@ export function validateModelMatchOutput(v: unknown): Result<ModelMatchOutput> {
 }
 
 // 后端定档：确定性规则，同样的信号永远得到同样的档位（治"摆动"的关键）。
+// 该绕开 = 踩中用户"绝不接受"或方向冲突，优先于对口。2026-10 评测：原规则只认"成长空间=无"，
+// 而模型 90 次从没给过"无"，踩雷信号又被忽略 → 该绕开召回为 0。
 export function decideVerdict(s: MatchSignals): { tier: VerdictTier; isBoundary: boolean } {
+  if (s.hitsHardNo || s.directionFit === "冲突") return { tier: "该绕开", isBoundary: false };
   if (s.directionFit === "对口") return { tier: "目标", isBoundary: false };
   if (s.growthRoom === "无") return { tier: "该绕开", isBoundary: false };
   return { tier: "跳板", isBoundary: true };

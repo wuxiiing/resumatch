@@ -83,6 +83,8 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model: dsModel,
         temperature: 0.3,
+        // 2026-10-17 对比实验：关思考结论一样、更简洁，耗时和 token 约为开思考的一半到三分之一
+        thinking: { type: "disabled" },
         messages: [
           { role: "system", content: system },
           { role: "user", content: `公司:${company}\n岗位:${position || "（未提供）"}\n\n【搜索结果】\n${evidence}\n\n请判断这个岗位的真实性。` }

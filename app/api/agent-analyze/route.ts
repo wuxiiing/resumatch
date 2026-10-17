@@ -22,5 +22,6 @@ export const POST = apiPost({ credit: "analyze", requireKey: "DEEPSEEK_API_KEY" 
     resumeEvidence: result.resumeEvidence,
     matchJudgment: result.matchJudgment,
     actionPlan: result.actionPlan,
+    recon: result.recon,
   };
 });

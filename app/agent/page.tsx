@@ -416,7 +416,8 @@ export default function AgentInputPage() {
         jdAnalysis: data.jdAnalysis,
         resumeEvidence: data.resumeEvidence,
         matchJudgment: data.matchJudgment,
-        actionPlan: data.actionPlan
+        actionPlan: data.actionPlan,
+        recon: data.recon
       };
       sessionStorage.setItem(AGENT_REPORT_KEY, JSON.stringify(report));
       router.push("/agent-result");

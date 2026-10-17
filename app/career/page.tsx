@@ -28,6 +28,7 @@ export default function CareerPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [deepThink, setDeepThink] = useState(false);
   const [pathLoading, setPathLoading] = useState(false);
   const [pathResult, setPathResult] = useState<CareerPath | null>(null);
   const [pathError, setPathError] = useState("");
@@ -95,7 +96,8 @@ export default function CareerPage() {
           resumeText: profile!.resumeText,
           targetDirection: profile!.intent?.targetDirection ?? "",
           hardNo: profile!.intent?.hardNo ?? [],
-          messages: priorMsgs
+          messages: priorMsgs,
+          thinking: deepThink
         }),
       });
       const data = await res.json();
@@ -136,7 +138,8 @@ export default function CareerPage() {
           resumeText: profile.resumeText,
           targetDirection: profile.intent?.targetDirection ?? "",
           hardNo: profile.intent?.hardNo ?? [],
-          messages: next
+          messages: next,
+          thinking: deepThink
         }),
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)])
       });
@@ -155,7 +158,7 @@ export default function CareerPage() {
         sessionStorage.removeItem(PENDING_KEY);
       }
     }
-  }, [input, loading, messages, profile]);
+  }, [input, loading, messages, profile, deepThink]);
 
   // 路径推演：调用 /api/career-path → 展示结果卡片
   async function runPathSimulation() {
@@ -252,7 +255,7 @@ export default function CareerPage() {
           {loading && (
             <div className="flex gap-2.5">
               <Avatar />
-              <div className="rounded-xl rounded-tl-sm border border-gf-rule bg-gf-surface px-4 py-3 text-[13px] text-gf-faint">小简在想…</div>
+              <div className="rounded-xl rounded-tl-sm border border-gf-rule bg-gf-surface px-4 py-3 text-[13px] text-gf-faint">{deepThink ? "小简在深度思考…会多等几秒" : "小简在想…"}</div>
             </div>
           )}
           {error && <div className="ml-[42px] text-[12.5px] text-gf-seal">{error}</div>}
@@ -293,6 +296,19 @@ export default function CareerPage() {
         </div>
 
         <div className="mt-3 shrink-0 border-t border-gf-rule pt-3">
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setDeepThink((v) => !v)}
+              aria-pressed={deepThink}
+              title="开启后小简先深入想一遍再回答：更周全，但每次多等几秒"
+              className={`rounded-md border px-2.5 py-1 text-[12px] transition-colors ${
+                deepThink ? "border-gf-green bg-gf-greentint text-gf-green" : "border-gf-rule text-gf-faint hover:bg-gf-greentint"
+              }`}
+            >
+              深度思考 · {deepThink ? "开" : "关"}
+            </button>
+          </div>
           <div className="flex items-end gap-2">
             <textarea
               className="h-11 max-h-32 flex-1 resize-none rounded-md border border-gf-rule bg-gf-surface/60 px-3 py-2.5 text-[13.5px] text-gf-ink outline-none transition-colors focus:border-gf-green disabled:opacity-60"

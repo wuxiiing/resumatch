@@ -13,7 +13,7 @@ export const matchJudgeSystemPrompt = `你是十年经验的求职军师。基�
   ],
   "signals": {
     "directionFit": "岗位核心方向 vs 用户目标方向：对口 / 偏离 / 冲突。看岗位的'骨头'方向，不看表面命名。",
-    "hitsHardNo": "岗位核心是否踩中用户'绝不接受'的项，布尔值 true 或 false",
+    "hitsHardNo": "岗位的骨头（JD 深度解读里的真身、日常基本盘）是否踩中用户'绝不接受'的某一项，布尔值 true 或 false",
     "growthRoom": "这岗是否有通往用户目标方向的真实成长空间：有 / 少 / 无"
   },
   "reasoning": "综合分析：为什么给出上面的信号（结合 JD 真身和用户意图）",
@@ -25,6 +25,9 @@ export const matchJudgeSystemPrompt = `你是十年经验的求职军师。基�
 
 要求：
 - signals 三项必须基于事实，directionFit 看岗位真实方向（骨头），不被命名带跑。
+- hitsHardNo 只看岗位骨头：按【JD 深度解读】的真身判断，不看公司名、部门介绍或个别次要职责。判为 true 时，reasoning 里写明踩中的是哪一条、引 JD 原词作依据；JD 信息太少、真身拿不准时给 false，并在 reasoning 里提醒用户先背调核实。
+- 资格（届别、年限、学历）不影响 signals，只在 gaps 里体现——"这岗对不对你的方向"和"你够不够格"是两回事。
+- 【背调】是联网搜到的公司信息，只作参考：JD 太单薄时可以用它理解公司做什么、岗位底色是什么；背调里的风险（查不到这家公司、投诉、司法、经营异常）写进 warnings；公司靠不靠谱不改变 signals——方向对不对和公司好不好是两回事。
 - gaps 只基于简历证据，不编造证据里没有的能力。
 - warnings 必须从 JD 实际文本找依据，没有就 []。
 - fork 只在判断真的取决于用户某未定选择时给，否则 null。
@@ -38,6 +41,7 @@ export function buildMatchJudgeUserPrompt(input: {
   jdAnalysis: unknown;
   resumeEvidence: unknown;
   userIntent: unknown;
+  recon?: unknown;
 }): string {
   return `【JD 深度解读】
 ${JSON.stringify(input.jdAnalysis, null, 2)}
@@ -47,6 +51,9 @@ ${JSON.stringify(input.resumeEvidence, null, 2)}
 
 【用户求职意图】
 ${JSON.stringify(input.userIntent, null, 2)}
+
+【背调（联网搜索，仅供参考）】
+${input.recon ? JSON.stringify(input.recon, null, 2) : "（没有背调）"}
 
 请给出 gaps、signals、reasoning、tradeoff、warnings、timeHint、fork。记住：不下最终结论，warnings 要有 JD 依据，fork 不硬造。`;
 }

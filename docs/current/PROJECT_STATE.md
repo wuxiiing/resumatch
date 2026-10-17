@@ -1,5 +1,6 @@
 # ResuMatch Current State
 
+> **最新（2026-10-17）· 模型回归修复 + 判级评测集 + 背调必做**：DeepSeek 2026-09-10 把 `deepseek-v4-flash` 转到默认开深度思考的 V4.1 Flash（思考吃满 max_tokens、temperature 失效），③判级基本跑不通（基线跑通率 7.8%）。修复：`deepseek.ts` 显式关思考 + 模型名改 `deepseek-flash`（`b0a529a`）。新增判级评测 `scripts/eval-verdict.mts`（30 道真实 JD × 3 次自动阅卷，人工标注答案放仓库外私有目录），据此又改了：`decideVerdict` 改为"踩雷或方向冲突 → 该绕开"（原来该绕开召回为 0；**交接文档里"判级规则不许动"的铁律，经用户同意按评测证据更新**）；③踩雷只看岗位底色（①的真身）、须引 JD 原文，资格不进判级；④口径跟 tier 走；新增 ⑤背调节点（①之后搜一次 Tavily + 一次模型，报告里显示"是不是坑"，只给③参考、不改定档；评测时用 `RECON_CACHE_DIR` 缓存搜索结果）；两个聊天加"深度思考"开关（默认关），两个深查背调路由关思考。最新成绩（含背调）：准确率 94.4%（瞎猜基线 66.7%）、pass^3 90.0%、一致性 93.3%、Macro-F1 0.88、P95 48.8s。已知：C13（补贴策略 PM）3 次全判该绕开，标注是跳板，待用户定口径。
 > **最新（2026-07-05）· P0 上线前收口 done**：导出限流(仅下载 `download:true` 计入 `edit` 5/天,实时预览不限)+ 删旧 export 死路由/lib(全仓零引用)+ 新增 `PRODUCTION_CHECKLIST.md`(实核 env)。R1+R2+P0 全部 WIP 已本地存档分支 `save/r1-r2-wip-20260705`(**未 push**)。下一步:P1 人工验证(用户跑)、P2 端到端。
 > **（2026-07-04）**：R1(竹林+侦探)+ R2(简历模板系统)均已完成。**新窗口先读 [HANDOFF-R2-DONE.md](HANDOFF-R2-DONE.md)**(收尾清单/上线前收口/R3 下一步/风险与红线),再看 `V2-PRODUCT-PLAN.md`。上一程交接 `HANDOFF-2026-07-04.md` 仍可参考。
 > **2.0 进行中（2026-06-28）**：简配 2.0「求职军师」功能基本齐 + 设计统一升级一轮 + 简历修改重做。
@@ -70,9 +71,9 @@ Not done: ⑤ assembly node; user-intent **dialog** collection (currently a hard
 
 ### 2.0 agent rebuild — known issues (2026-06-24)
 
-- ✅ **③ match-judge verdict stability — FIXED (2026-06-24)**: refactored to "model emits signals (directionFit / hitsHardNo / growthRoom) → backend `decideVerdict()` rule sets the tier". Tier now 5/5 stable even when underlying signals wobble, because the backend if-else absorbs the wobble (temperature 0.3→0 alone did NOT fix it — DeepSeek is non-deterministic even at t=0, and "跳板 vs 该绕开" is a genuine boundary). Boundary cases get `isBoundary: true` + a `tradeoff` string for the user to decide (the "结合" / A+B approach). Also raised ③ `max_tokens` 2000→4000 (reasoning+tradeoff were overflowing and truncating the JSON).
-- **④ ignores ③'s verdict**: ④ still gives a full "how to win" plan even when ③ says "该绕开". ④ should condition on ③ (e.g. "if you still want in, here's how").
-- **callDeepSeek duplicated** in all 4 node files; extract a shared `lib/agents/deepseek.ts` during cleanup.
+- ✅ **③ match-judge verdict stability — FIXED (2026-06-24)**: refactored to "model emits signals (directionFit / hitsHardNo / growthRoom) → backend `decideVerdict()` rule sets the tier". Tier now 5/5 stable even when underlying signals wobble, because the backend if-else absorbs the wobble (temperature 0.3→0 alone did NOT fix it — DeepSeek is non-deterministic even at t=0, and "跳板 vs 该绕开" is a genuine boundary). Boundary cases get `isBoundary: true` + a `tradeoff` string for the user to decide (the "结合" / A+B approach). Also raised ③ `max_tokens` 2000→4000 (reasoning+tradeoff were overflowing and truncating the JSON). ⚠️ 2026-10-17：5/5 是旧模型时代的实测；DeepSeek 09-10 换代后以判级评测集为准（见顶部）。
+- ✅ **④ ignores ③'s verdict — FIXED (2026-10-17)**: ④ 的口径跟 ③ 的 tier 走——该绕开先说"不建议优先投"和原因，再给"如果仍想投"的精简打法；跳板保留探虚实反问。
+- ✅ **callDeepSeek duplicated — DONE**: 各节点已统一用 `lib/agents/deepseek.ts` 的 `callDeepSeekJson`。
 - LangGraph node names must NOT collide with state channel names (hit twice). Convention: node names = verbs (`analyzeJd`, `planActions`), channels = nouns (`jdAnalysis`, `actionPlan`).
 
 ## Key Files

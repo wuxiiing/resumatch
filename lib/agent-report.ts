@@ -59,12 +59,33 @@ export type UserIntent = { targetDirection: string; hardNo: string[] };
 
 export type ReportMeta = { position: string; company: string; date: string };
 
+// ⑤ 背调（是不是坑）。旧报告没有这个字段，所以可选
+export type Recon =
+  | {
+      status: "ok";
+      searchedName: string;
+      sources: { title: string; url: string }[];
+      company: string;
+      found: boolean;
+      basics: string;
+      reputation: string;
+      jobAuthenticity: string;
+      registry: string;
+      complaints: string;
+      riskLevel: "低" | "中" | "高" | "无法判断";
+      confidence: "高" | "中" | "低";
+      riskWhy: string;
+      tips: string;
+    }
+  | { status: "skipped" | "failed"; searchedName: string; note: string };
+
 export type AgentReport = {
   meta: ReportMeta;
   jdAnalysis: JdAnalysis;
   resumeEvidence: ResumeEvidence;
   matchJudgment: MatchJudgment;
   actionPlan: ActionPlan;
+  recon?: Recon;
 };
 
 // 简配档案 = 真·记忆：一次设好，换 JD 不用重贴简历。

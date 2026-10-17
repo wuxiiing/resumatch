@@ -53,6 +53,8 @@ export const POST = apiPost({ credit: "chat", requireKey: "DEEPSEEK_API_KEY" }, 
   const payload = {
     model,
     temperature: 0.6,
+    // 深度思考由前端开关决定，默认关（DeepSeek 默认开，不显式关就一直在思考）
+    thinking: { type: body.thinking === true ? "enabled" : "disabled" },
     messages: [{ role: "system", content: `${SYSTEM}\n\n${context}${knowledgeBlock}` }, ...history.map((m) => ({ role: m.role, content: m.content }))]
   };
 

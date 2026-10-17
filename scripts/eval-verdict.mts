@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
+import { decideVerdict } from "../lib/agents/match-judge/schema.ts";
 
 type Tier = "目标" | "跳板" | "该绕开";
 type Label = { id: string; tier: Tier; boundary: boolean; reason: string };
@@ -141,6 +142,13 @@ function selftest() {
   assert.equal(Number(s.macroF1.toFixed(2)), 0.6);
   assert.deepEqual(s.majority, { tier: "目标", acc: 1 / 3 });
   assert.deepEqual([s.hard, s.soft], [{ correct: 2, n: 3 }, { correct: 3, n: 3 }]);
+  // 被测系统的定档规则：踩雷或方向冲突一律该绕开（C17 曾是"偏离/踩雷/少"却判成跳板）
+  assert.equal(decideVerdict({ directionFit: "对口", hitsHardNo: false, growthRoom: "有" }).tier, "目标");
+  assert.equal(decideVerdict({ directionFit: "对口", hitsHardNo: true, growthRoom: "有" }).tier, "该绕开");
+  assert.equal(decideVerdict({ directionFit: "偏离", hitsHardNo: true, growthRoom: "少" }).tier, "该绕开");
+  assert.equal(decideVerdict({ directionFit: "冲突", hitsHardNo: false, growthRoom: "有" }).tier, "该绕开");
+  assert.equal(decideVerdict({ directionFit: "偏离", hitsHardNo: false, growthRoom: "少" }).tier, "跳板");
+  assert.equal(decideVerdict({ directionFit: "偏离", hitsHardNo: false, growthRoom: "无" }).tier, "该绕开");
 }
 
 // 熔断：跑满 6 次后失败过半就别再派新任务（管线坏了时重试只会成倍花钱）
@@ -193,6 +201,8 @@ const runs: Run[] = reportDir
 
 // ── 跑：简单的并发池，每完成一次就落盘一行，中途断了也不丢已跑的结果 ──
 if (!reportDir) {
+  // 背调的搜索结果按搜索词缓存在评测集目录里：评测可复现，第二次起不再花搜索额度
+  process.env.RECON_CACHE_DIR ??= path.join(evalDir, "recon-cache");
   const { graph } = await import("../lib/agents/graph.ts");
   const resumeText = fs.readFileSync(path.join(evalDir, "resume.txt"), "utf8");
   const userIntent = JSON.parse(fs.readFileSync(path.join(evalDir, "intent.json"), "utf8"));

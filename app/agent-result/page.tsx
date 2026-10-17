@@ -127,6 +127,81 @@ function SubNote({ label, text }: { label: string; text: string }) {
   );
 }
 
+const RISK_TONE: Record<string, string> = { 高: "text-gf-seal", 中: "text-gf-amber", 低: "text-gf-green", 无法判断: "text-gf-faint" };
+
+// 是不是坑 · 背调：联网搜一次、只依据搜索结果；查不到本身也是风险信号。和判级（方向）是两个维度。
+function ReconCard({ recon }: { recon: NonNullable<AgentReport["recon"]> }) {
+  const items: [string, string][] =
+    recon.status === "ok"
+      ? [
+          ["公司是谁", recon.basics],
+          ["口碑与工作体验", recon.reputation],
+          ["岗位真不真", recon.jobAuthenticity],
+          ["工商与关联", recon.registry],
+          ["投诉与司法", recon.complaints]
+        ]
+      : [];
+  return (
+    <section className="relative z-10 mt-6 rounded-xl border border-gf-rule bg-gf-surface p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Tick />
+        <span className="font-serifcn text-[14px] font-semibold text-gf-ink">是不是坑 · 背调</span>
+        <span className="text-[12px] text-gf-faint">
+          联网搜索{recon.searchedName ? `「${recon.searchedName}」` : ""} · 仅供参考
+        </span>
+      </div>
+      {recon.status !== "ok" ? (
+        <p className="text-[14px] leading-relaxed text-gf-soft">{recon.note}</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className={`font-serifcn text-[16px] font-semibold ${RISK_TONE[recon.riskLevel] ?? "text-gf-faint"}`}>
+              风险 · {recon.riskLevel}
+            </span>
+            <span className="text-[12px] text-gf-faint">可信度 {recon.confidence}</span>
+          </div>
+          {recon.riskWhy && <p className="mt-1 text-[14px] leading-relaxed text-gf-ink">{recon.riskWhy}</p>}
+          <div className="mt-3 divide-y divide-gf-rule border-y border-gf-rule">
+            {items
+              .filter(([, text]) => text)
+              .map(([label, text]) => (
+                <div key={label} className="py-2.5">
+                  <div className="text-[12px] tracking-wide text-gf-green">{label}</div>
+                  <div className="mt-0.5 text-[14px] leading-relaxed text-gf-soft">{text}</div>
+                </div>
+              ))}
+          </div>
+          {recon.tips && (
+            <p className="mt-3 text-[14px] leading-relaxed">
+              <span className="font-serifcn text-gf-green">提醒　</span>
+              {recon.tips}
+            </p>
+          )}
+          {recon.sources.length > 0 && (
+            <div className="mt-3 border-t border-gf-rule pt-2 text-[12px] text-gf-faint">
+              来源：
+              {recon.sources
+                .filter((s) => /^https?:\/\//.test(s.url)) // 外部数据当链接前只放行 http(s)
+                .slice(0, 5)
+                .map((s, i) => (
+                  <a
+                    key={i}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 inline-block max-w-[220px] truncate align-bottom underline decoration-gf-rule hover:text-gf-green"
+                  >
+                    {s.title || s.url}
+                  </a>
+                ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function VerdictView({ report }: { report: AgentReport }) {
   const { meta, jdAnalysis: jd, resumeEvidence: ev, matchJudgment: mj, actionPlan: plan } = report;
   const title = [meta.position, meta.company].filter(Boolean).join(" · ") || "岗位研判";
@@ -205,6 +280,8 @@ function VerdictView({ report }: { report: AgentReport }) {
           )}
         </section>
       )}
+
+      {report.recon && <ReconCard recon={report.recon} />}
 
       {/* 取舍 / 时限 · 时限空时取舍自动占满 */}
       {(mj.tradeoff || mj.timeHint) && (

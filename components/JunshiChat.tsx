@@ -16,6 +16,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [deepThink, setDeepThink] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 有效公司名：优先 meta.company，退回 ① 推断的最可能公司（很多研判 meta 没填公司，只在 orgGuess 里）。
   const company = report.meta.company?.trim() || report.jdAnalysis.orgGuess?.candidates[0]?.name?.trim() || "";
@@ -65,7 +66,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
       const res = await fetch("/api/agent-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report, resumeText, messages: next })
+        body: JSON.stringify({ report, resumeText, messages: next, thinking: deepThink })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "对话失败");
@@ -180,7 +181,7 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
             </div>
           </div>
         ))}
-        {loading && <div className="text-[12.5px] text-gf-faint">军师思考中…</div>}
+        {loading && <div className="text-[12.5px] text-gf-faint">{deepThink ? "军师深度思考中…会多等几秒" : "军师思考中…"}</div>}
         {error && <div className="text-[12.5px] text-gf-seal">{error}</div>}
       </div>
 
@@ -212,6 +213,17 @@ export function JunshiChat({ report, embedded = false }: { report: AgentReport; 
             className="rounded-md border border-gf-rule px-2.5 py-1 text-[12px] text-gf-green transition-colors hover:bg-gf-greentint disabled:opacity-50"
           >
             面试方法
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeepThink((v) => !v)}
+            aria-pressed={deepThink}
+            title="开启后军师先深入想一遍再回答：更周全，但每次多等几秒"
+            className={`ml-auto rounded-md border px-2.5 py-1 text-[12px] transition-colors ${
+              deepThink ? "border-gf-green bg-gf-greentint text-gf-green" : "border-gf-rule text-gf-faint hover:bg-gf-greentint"
+            }`}
+          >
+            深度思考 · {deepThink ? "开" : "关"}
           </button>
         </div>
         <div className="flex items-end gap-2">

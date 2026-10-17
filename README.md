@@ -2,7 +2,7 @@
 
 > **求职军师**，不是简历打分器。看穿 JD、研判值不值得打、告诉你怎么打。
 
-把简历和目标岗位丢进来，军师逐层过卷——先解读 JD 真身、再提取简历证据、然后立体匹配给裁决（目标/跳板/该绕开），最后出具体的简历改写策略 + 面试考点拆解 + 谈薪话术。聊完还能改简历、选模板、导出专业 PDF/Word。
+把简历和目标岗位丢进来，军师逐层过卷——先解读 JD 真身、再提取简历证据、联网背调公司、然后立体匹配给裁决（目标/跳板/该绕开），最后出具体的简历改写策略 + 面试考点拆解 + 谈薪话术。聊完还能改简历、选模板、导出专业 PDF/Word。
 
 ## 在线地址
 
@@ -43,7 +43,7 @@
 | AI 脑 | DeepSeek（研判/对话/规划/背调） |
 | AI 眼 | 豆包 Seed Vision（图片简历 OCR + 结构化） |
 | 搜索 | Tavily（背调 + 岗位真实性） |
-| 工作流 | LangGraph JS（①②③④ 串行研判管道） |
+| 工作流 | LangGraph JS（①②并行 → ⑤背调 → ③判级 → ④策略） |
 | PDF | @react-pdf/renderer（4 套模板 + 字体子集化） |
 | DOCX | docx 库 |
 | 简历解析 | pdfjs-dist + mammoth + xlsx |
@@ -92,7 +92,7 @@ app/
   profile/page.tsx             # 我的简历（长期档案）
   resume/page.tsx              # 简历工作台（editor|preview 双栏）
   api/
-    agent-analyze/route.ts     # 主研判管道 ①②③④
+    agent-analyze/route.ts     # 主研判管道 ①②⑤③④
     agent-chat/route.ts        # 军师对话
     career/route.ts            # 方向校准
     career-chat/route.ts       # 小简对话
